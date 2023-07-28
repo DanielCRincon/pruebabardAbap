@@ -1,0 +1,2711 @@
+*&---------------------------------------------------------------------*
+*& Report  ZCDFI_RPTEFECTIVO
+*&
+*&---------------------------------------------------------------------*
+INCLUDE zcdfi_rptefectivo_top.
+INCLUDE zcdfi_rptefectivo_f01.
+
+INITIALIZATION.
+  p_gjahr = sy-datum.
+
+  PERFORM f_get_set.
+
+* Ini BN2NMCBARRET 14.02.2023 #7000003261
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_lroot.
+  PERFORM f_get_local_root CHANGING p_lroot.
+
+START-OF-SELECTION.
+  PERFORM f_get_info.
+  
+  
+*&---------------------------------------------------------------------*
+*&  Include           ZCDFI_RPTEFECTIVO_TOP
+*&---------------------------------------------------------------------*
+REPORT zcdfi_rptefectivo.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-000.
+PARAMETERS: p_bukrs TYPE bukrs DEFAULT '1000' OBLIGATORY,
+            p_gjahr TYPE gjahr OBLIGATORY,
+SELECTION-SCREEN END OF BLOCK b1.
+
+*Ini BN2NMCBARRET 14.02.2023 #7000003261
+SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE text-015.
+PARAMETERS: p_lroot  TYPE localfile OBLIGATORY. "Modificar HRDCR 14.07.2023 #7000003290
+            "p_lroot2 TYPE localfile. "Comentar HRDCR 14.07.2023 #7000003290
+SELECTION-SCREEN END OF BLOCK b4.
+*Fin BN2NMCBARRET 14.02.2023 #7000003261
+
+*Ini HRDANIELCABRERA 16.07.2023 #7000003290
+SELECTION-SCREEN BEGIN OF BLOCK b5 WITH FRAME TITLE text-016.
+  PARAMETERS: p_trmult TYPE i OBLIGATORY,
+              p_tindiv TYPE i OBLIGATORY.
+SELECTION-SCREEN END OF BLOCK b5.
+*Fin HRDANIELCABRERA 16.07.2023 #7000003290
+
+DATA: r_date TYPE RANGE OF datum,
+      r_fkart TYPE RANGE OF fkart WITH HEADER LINE,
+      r_fkdat TYPE RANGE OF datum WITH HEADER LINE.
+
+TYPES: BEGIN OF ty_bkpf,
+         bukrs TYPE bukrs,
+         belnr TYPE belnr_d,
+         gjahr TYPE gjahr,
+         blart TYPE blart,
+***         bldat	TYPE bldat,
+         budat TYPE budat,
+         xblnr TYPE xblnr1,
+       END OF ty_bkpf.
+DATA: it_bkpf TYPE TABLE OF ty_bkpf.
+
+TYPES: BEGIN OF ty_bseg,
+         bukrs TYPE bukrs,
+         belnr TYPE belnr_d,
+         gjahr TYPE gjahr,
+         buzei TYPE buzei,
+         wrbtr TYPE wrbtr,
+         pswsl TYPE pswsl,
+         zuonr TYPE dzuonr,
+         sgtxt TYPE sgtxt,
+         gsber TYPE gsber,  "Agrega HRDCR 04.07.2023 #7000003290
+       END OF ty_bseg.
+DATA: it_bseg  TYPE TABLE OF ty_bseg.
+
+TYPES: BEGIN OF ty_calc,
+         bukrs TYPE bukrs,
+         belnr TYPE belnr_d,
+         gjahr TYPE gjahr,
+         buzei TYPE buzei,
+         wrbtr TYPE wrbtr,
+         pswsl TYPE pswsl,
+         zuonr TYPE dzuonr,
+         sgtxt TYPE sgtxt,
+         kunnr TYPE kunnr,
+         gsber TYPE gsber,  "Agrega HRDCR 10.07.2023 #7000003290
+         name1 TYPE name1_gp,
+         name2 TYPE name1_gp,
+         name3 TYPE name1_gp,
+         name4 TYPE name1_gp,
+         stcd1 TYPE stcd1,
+         stcdt TYPE j_1atoid,
+         profs TYPE profs,
+         budat TYPE budat,
+       END OF ty_calc,
+
+       BEGIN OF ty_split,
+         string(30) TYPE c,
+       END OF ty_split,
+
+       BEGIN OF ty_fact,
+         vbeln TYPE vbrk-vbeln,
+       END OF ty_fact.
+
+TYPES: tyt_string TYPE STANDARD TABLE OF string. "BN2NMCBARRET 14.02.2023 #7000003261
+
+*{N2N 20/01/2023 #7000003260
+TYPES ty_t_calc TYPE SORTED TABLE OF ty_calc WITH UNIQUE KEY belnr WITH NON-UNIQUE SORTED KEY skey COMPONENTS kunnr.
+DATA: it_calc_ok    TYPE ty_t_calc,
+      it_calc_10    TYPE ty_t_calc,
+      it_calc_nn    TYPE ty_t_calc,
+      it_calc_10_nn TYPE ty_t_calc.
+
+TYPES: BEGIN OF ty_sum,
+         kunnr TYPE kunnr,
+         wrbtr TYPE wrbtr,
+         budat TYPE budat,
+       END OF ty_sum.
+*Comenta N2N 20/01/2023 #7000003260
+DATA: it_sum_ok    TYPE TABLE OF ty_sum,
+      it_sum_50    TYPE TABLE OF ty_sum,
+      it_sum_50_nn TYPE TABLE OF ty_sum,
+      it_sum_nn    TYPE TABLE OF ty_sum.
+*Fin Comentario N2N 20/01/2023 #7000003260
+
+
+TYPES: BEGIN OF ty_kna1,
+         kunnr TYPE kunnr,
+         name1 TYPE name1_gp,
+         aufsd TYPE kna1-aufsd, "26.05.2017
+         faksd TYPE kna1-faksd, "26.05.2017
+         lifsd TYPE kna1-lifsd, "26.05.2017
+         stcd1 TYPE stcd1,
+         stcdt TYPE j_1atoid,
+       END OF ty_kna1.
+*DATA: it_kna1 TYPE TABLE OF ty_kna1.                              "Comenta N2N 20/01/2023 #7000003260
+DATA: it_kna1 TYPE SORTED TABLE OF ty_kna1 WITH UNIQUE KEY kunnr.  "Agrega  N2N 20/01/2023 #7000003260
+
+TYPES: BEGIN OF ty_lfa1,
+         lifnr TYPE lifnr,
+         profs TYPE profs,
+       END OF ty_lfa1.
+DATA: it_lfa1 TYPE TABLE OF ty_lfa1.
+
+TYPES: BEGIN OF ty_knvp,
+         kunnr TYPE knvp-kunnr,
+         parvw TYPE knvp-parvw,
+         kunn2 TYPE knvp-kunn2,
+       END OF ty_knvp.
+DATA: it_knvp TYPE TABLE OF ty_knvp.
+
+TYPES:BEGIN OF zcdfiparamefecti,
+        hbkid TYPE hbkid,
+        hktid TYPE hktid,
+        zuonr TYPE dzuonr,
+        sgtxt TYPE sgtxt,
+      END OF zcdfiparamefecti.
+DATA: it_zcdfiparamefecti TYPE TABLE OF zcdfiparamefecti.
+
+DATA: it_archivo TYPE TABLE OF string.
+
+DATA: it_split TYPE TABLE OF ty_split WITH HEADER LINE,
+*      it_fact  TYPE TABLE OF ty_fact WITH HEADER LINE,             "Comenta N2N 20/01/2023 #7000003260
+      it_fact2  TYPE SORTED TABLE OF ty_fact WITH UNIQUE KEY vbeln, "Agrega N2N 20/01/2023 #7000003260
+*      it_vbrk  TYPE TABLE OF vbrk,                                 "Comenta N2N 20/01/2023 #7000003260
+      it_vbrk  TYPE SORTED TABLE OF vbrk WITH UNIQUE KEY vbeln,     "Agrega N2N 20/01/2023 #7000003260
+      wa_vbrk  TYPE vbrk,
+      lv_lines TYPE i,
+      c_blart TYPE bkpf-blart VALUE 'XT',
+      c_coopi TYPE vbrk-vkorg VALUE '1000',
+      c_buzei TYPE bseg-buzei VALUE '02',
+      wa_fact  TYPE ty_fact.
+
+DATA: cur_data1 TYPE cursor,
+      cur_data2 TYPE cursor,
+      cur_data3 TYPE cursor,
+      it_bkpf_cur TYPE TABLE OF ty_bkpf,
+      it_bseg_cur TYPE TABLE OF ty_bseg,
+      it_vbrk_cur TYPE TABLE OF vbrk.
+	  
+*&---------------------------------------------------------------------*
+*&  Include           ZCDFI_RPTEFECTIVO_F01
+*&---------------------------------------------------------------------*
+
+DEFINE a_input.
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+  EXPORTING
+    INPUT  = &1
+ IMPORTING
+   OUTPUT  = &1.
+END-OF-DEFINITION.
+
+DEFINE instfact.
+
+  READ TABLE it_fact2 TRANSPORTING NO FIELDS WITH TABLE KEY vbeln = &1.
+  IF sy-subrc NE 0.
+    INSERT &1 INTO TABLE it_fact2.
+  ENDIF.
+END-OF-DEFINITION.
+*&---------------------------------------------------------------------*
+*&      Form  F_GET_INFO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_get_info.
+
+  DATA: wa_r_date           LIKE LINE OF r_date,
+        wa_bkpf             LIKE LINE OF it_bkpf,
+        wa_bseg             LIKE LINE OF it_bseg,
+        wa_zcdfiparamefecti LIKE LINE OF it_zcdfiparamefecti,
+        wa_kna1             LIKE LINE OF it_kna1,
+**        wa_lfa1             LIKE LINE OF it_lfa1,
+        wa_knvp             LIKE LINE OF it_knvp,
+        wa_calc_ok          LIKE LINE OF it_calc_ok,
+        wa_calc_nn          LIKE LINE OF it_calc_nn,
+        wa_sum_ok           LIKE LINE OF it_sum_ok,
+        wa_sum_nn           LIKE LINE OF it_sum_nn,
+        wa_sum_50           LIKE LINE OF it_sum_50,
+        wa_sum_50_nn        LIKE LINE OF it_sum_50_nn.
+
+  DATA: lv_date_ini1       TYPE datum,
+*        lv_date_ini2       TYPE datum,"Comenta BN2NMCBARRET 14.02.2023 #7000003261
+*        lv_date_fin1       TYPE datum,"Comenta BN2NMCBARRET 14.02.2023 #7000003261
+        lv_date_fin2       TYPE datum,
+        lv_date_ini_fact   TYPE datum,
+        lv_date_fin_fact   TYPE datum,
+        lv_mes_1(2)        TYPE c,
+        lv_mes_2(2)        TYPE c,
+        lv_string1         TYPE string,
+        lv_string2         TYPE string,
+        lv_string3         TYPE string,
+        lv_string4         TYPE string,
+        lv_string5         TYPE string,
+        lv_string6         TYPE string,
+        lv_hbkid           TYPE hbkid,
+        lv_hktid           TYPE hktid,
+        lv_zuonr           TYPE dzuonr,
+        lv_sgtxt           TYPE sgtxt,
+        lv_stcd1           TYPE stcd1,
+        lv_stcd2           TYPE stcd1,
+        lv_name1           TYPE kna1-name1,
+        lv_name2           TYPE kna1-name1,
+        lv_name3           TYPE kna1-name1,
+        lv_name4           TYPE kna1-name1,
+        lv_nombrecom       TYPE string,      "Agrega HRDCR 05.07.2023 #7000003290
+        lv_check_param(1),
+        lv_check_param2(1),
+        lv_check_nit(1),
+        lv_flag(1),
+        lv_vbeln           TYPE vbrk-vbeln,
+        lv_vbeln_bog       TYPE string,
+        lv_bogo1           TYPE vbrk-vbeln,
+        lv_bogo2           TYPE vbrk-vbeln,
+        lv_stringprueba   TYPE string,      "Agrega HRDCR 06.07.2023 #7000003290
+        lv_caracter       TYPE char1,       "Agrega HRDCR 07.07.2023 #7000003290
+        lv_length4        TYPE i,           "Agrega HRDCR 10.07.2023 #7000003290
+        p_sep             TYPE char1.        "Agrega HRDCR 11.07.2023 #7000003290
+**        p_root            TYPE eseftappl,    "Comenta HRDCR 11.07.2023 #7000003290
+**        p_root2           TYPE eseftappl.    "Comenta HRDCR 11.07.2023 #7000003290
+
+
+*  DATA: it_calc_ok_copy LIKE it_calc_ok,                    Comenta N2N 20/01/2023 #7000003260
+*        it_calc_nn_copy LIKE it_calc_nn.                    Comenta N2N 20/01/2023 #7000003260
+  DATA: it_calc_ok_copy TYPE STANDARD TABLE OF ty_calc,      "Agrega N2N 20/01/2023 #7000003260
+        it_calc_nn_copy TYPE STANDARD TABLE OF ty_calc.      "Agrega N2N 20/01/2023 #7000003260
+
+  FIELD-SYMBOLS: <fs_wa_calc_nn> TYPE ty_calc.
+
+****  Registros Tipo 1 -  Cabecera
+  DATA: lv_cont_50  TYPE i,
+        lv_cont_10  TYPE i,
+        lv_cont_tot TYPE i.
+*
+  CONSTANTS: lk_consec(10) TYPE c VALUE '0',
+**             lk_codorg(10) TYPE c VALUE '0600812500'.
+             lk_codorg(10) TYPE c VALUE '0600801250'.
+
+
+***   Variables cabecera archivo
+  DATA: lv_length      TYPE i,
+        lv_length2     TYPE i,
+        lv_longitud    TYPE i,
+        lv_do_calc     TYPE i,
+        lv_fecha_corte TYPE  c LENGTH  10,
+        lv_trans_tot   TYPE  c LENGTH  10,
+        lv_fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 07.07.2023 #7000003290
+        lv_fin_archivo TYPE  c LENGTH  614.      "Modifica HRDCR 07.07.2023 #7000003290
+
+***   Variables Detalle de Archivo
+  DATA: lv_consec       TYPE  c LENGTH  10.
+
+  CONSTANTS: lk_tipo_mon TYPE  c LENGTH  1 VALUE '1',
+             lk_cod_of   TYPE  c LENGTH  15 VALUE '1              ',
+             lk_cod_dep  TYPE  c LENGTH  5 VALUE '11001',
+             lk_tip_prod TYPE  c LENGTH  2 VALUE '71',      "Modifica HRDCR 30.06.2023 #7000003290
+             lk_tip_tran TYPE  c LENGTH  1 VALUE '2',       "Modifica HRDCR 05.07.2023 #7000003290
+             lk_med_tran TYPE  c LENGTH  1 VALUE '2',       "Modifica HRDCR 06.07.2023 #7000003290
+             lk_apelltit TYPE  c LENGTH  2 VALUE '-1',      "Agrega HRDCR 07.07.2023 #7000003290
+             lk_razsoci  TYPE  c LENGTH  2 VALUE  '-1',     "Agrega HRDCR 04.07.2023 #7000003290
+             lk_ingreso  TYPE  c LENGTH  20 VALUE '0',
+             lk_cod_ent  TYPE  c LENGTH  20 VALUE '0600812500',
+             lk_ciiu     TYPE  c LENGTH  4  VALUE '4773'.
+
+  TYPES: BEGIN OF ty_detail,
+           cons_reg     TYPE  c LENGTH  10,
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20,
+           tipo_moned   TYPE  c LENGTH  3,       "Agrega HRDCR 29.06.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Agrega HRDCR 07.07.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,     "Comenta HRDCR 04.07.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 04.07.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,       "Modifica HRDCR 29.06.2023 #7000003290
+           tip_tran     TYPE  c LENGTH  1,
+           med_tran     TYPE  c LENGTH  1,       "Modifica HRDCR 05.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 06.07.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  70,      "Agrega HRDCR 07.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Comenta HRDCR 30.06.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Comenta HRDCR 04.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Comenta HRDCR 06.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Comenta HRDCR 10.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,       "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  100,      "Modifica HRDCR 30.06.2023 #7000003290
+           cod_dep      TYPE  c LENGTH  5,       "Modifica HRDCR 29.06.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2   TYPE  c LENGTH  2,      "Agrega HRDCR 04.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,      "Agrega HRDCR 05.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  100,   "Modifica HRDCR 05.07.2023 #700000329
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20,
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail.
+  DATA: it_detail TYPE TABLE OF ty_detail,
+        wa_detail LIKE LINE OF it_detail.
+
+  TYPES: BEGIN OF ty_detail_char,
+           cons_reg     TYPE  c LENGTH  10  , ""
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20  , ""
+           tipo_moned   TYPE  c LENGTH  3,      "Modifica HRDCR 29.06.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Modifica HRDCR 04.07.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,      "Comenta HRDCR 04.07.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 04.07.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,      "Modifica HRDCR 05.07.2023 #7000003290
+           tip_tran     TYPE  c LENGTH  1,
+           med_tran     TYPE  c LENGTH  1,      "Modifica HRDCR 07.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 30.06.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  70,      "Agrega HRDCR 04.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,       "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  100,      "Modifica HRDCR 30.06.2023 #7000003290
+           cod_dep      TYPE  c LENGTH  5,      "Modifica HRDCR 29.06.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2   TYPE  c LENGTH  2,       "Agrega HRDCR 05.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,     "Agrega HRDCR 05.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  100,    "Agrega HRDCR 05.07.2023 #7000003290
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20, ""
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail_char.
+  DATA: wa_detail_char TYPE ty_detail_char.
+
+
+
+  FIELD-SYMBOLS:<fs_wa_detail> TYPE ty_detail.
+
+  DATA: lv_type_descr   TYPE REF TO cl_abap_typedescr,
+        c_tab(1)        TYPE c VALUE cl_abap_char_utilities=>horizontal_tab,
+        lv_separador(1) TYPE c,
+        lv_name_file    TYPE string,
+        lv_char549(644) TYPE c,      "Modifica HRDCR 04.07.2023 #7000003290
+        lv_char548(643) TYPE c,      "Modifica HRDCR 04.07.2023 #7000003290
+        lv_valbase      TYPE i,
+        lv_result       TYPE i.
+
+  TYPES: BEGIN OF ty_head,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           fecha_corte TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 05.07.2023 #7000003290
+         END OF ty_head.
+  DATA: wa_head TYPE ty_head.
+
+  TYPES: BEGIN OF ty_tail,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  614,      "Modifica HRDCR 05.07.2023 #7000003290
+         END OF ty_tail.
+  DATA: wa_tail TYPE ty_tail.
+
+**** Consultar parametrización de Bancos para lógica de proceso
+  REFRESH it_zcdfiparamefecti.
+  SELECT hbkid hktid zuonr sgtxt
+    FROM zcdfiparamefecti
+    INTO TABLE it_zcdfiparamefecti
+    WHERE bukrs = p_bukrs.
+  IF sy-subrc <> 0.
+    MESSAGE 'No se encontró parametrización de bancos para lógica de proceso. Tabla: ZCDFIPARAMEFECTI'(003) TYPE 'E'.
+    LEAVE PROGRAM.
+  ELSE.
+    SORT it_zcdfiparamefecti BY hbkid hktid zuonr sgtxt.
+  ENDIF.
+
+  lv_mes_1 = p_month. "BN2NMCBARRET 14.02.2023 #7000003261
+
+  lv_date_ini1 = p_gjahr && lv_mes_1 && '01'.
+*  lv_date_ini2 = p_gjahr && lv_mes_2 && '01'. "Comenta BN2NMCBARRET 14.02.2023 #7000003261
+
+  CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
+    EXPORTING
+      day_in            = lv_date_ini1
+    IMPORTING
+*     last_day_of_month = lv_date_fin1 "Comenta BN2NMCBARRET 14.02.2023 #7000003261
+      last_day_of_month = lv_date_fin2  "BN2NMCBARRET 14.02.2023 #7000003261
+    EXCEPTIONS
+      day_in_no_date    = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    LEAVE PROGRAM.
+  ENDIF.
+
+  lv_date_fin_fact = lv_date_ini1.
+
+  CALL FUNCTION 'CALCULATE_DATE'
+    EXPORTING
+*     DAYS        = '-120'
+      months      = '-4'
+      start_date  = lv_date_fin_fact
+    IMPORTING
+      result_date = lv_date_ini_fact.
+** Rango de fechas de factura
+  CLEAR r_fkdat.
+  r_fkdat-sign   = 'I'.
+  r_fkdat-option = 'BT'.
+  r_fkdat-low    = lv_date_ini_fact.
+  r_fkdat-high   = lv_date_fin2.
+  APPEND r_fkdat.
+
+  CLEAR wa_r_date.
+  wa_r_date-sign   = 'I'.
+  wa_r_date-option = 'BT'.
+  wa_r_date-low    = lv_date_ini1.
+  wa_r_date-high   = lv_date_fin2.
+  APPEND wa_r_date TO r_date.
+
+** Rango Tipo de factura no incluida
+  CLEAR r_fkart.
+  r_fkart-sign   = 'I'.
+  r_fkart-option = 'NE'.
+  r_fkart-low    = 'ZNCR'.
+  APPEND  r_fkart.
+
+  CLEAR r_fkart.
+  r_fkart-sign   = 'I'.
+  r_fkart-option = 'NE'.
+  r_fkart-low    = 'ZDEV'.
+  APPEND  r_fkart.
+
+  CLEAR r_fkart.
+  r_fkart-sign   = 'I'.
+  r_fkart-option = 'NE'.
+  r_fkart-low    = 'ZDPS'.
+  APPEND  r_fkart.
+
+** Consultar documentos 'XT'
+  REFRESH it_bkpf.
+  OPEN CURSOR cur_data1 FOR
+    SELECT bukrs belnr gjahr blart budat xblnr
+      FROM bkpf
+*      INTO TABLE it_bkpf
+      WHERE bukrs = p_bukrs AND
+            gjahr = p_gjahr AND
+            blart = c_blart AND
+            budat IN r_date.
+  DO.
+    FETCH NEXT CURSOR cur_data1 INTO CORRESPONDING FIELDS OF TABLE it_bkpf_cur.
+    IF sy-subrc NE 0.
+      CLOSE CURSOR cur_data1.
+      EXIT.
+    ELSE.
+      it_bkpf[] = it_bkpf_cur[].
+    ENDIF.
+  ENDDO.
+  IF it_bkpf[] IS NOT INITIAL.
+    SORT it_bkpf BY bukrs belnr gjahr.
+    REFRESH: it_bseg, it_calc_ok, it_calc_nn.
+    OPEN CURSOR cur_data2 FOR
+      SELECT bukrs belnr gjahr buzei wrbtr pswsl zuonr sgtxt gsber
+        FROM bseg
+*        INTO TABLE it_bseg
+        FOR ALL ENTRIES IN it_bkpf
+        WHERE bukrs = it_bkpf-bukrs AND
+              belnr = it_bkpf-belnr AND
+              gjahr = it_bkpf-gjahr AND
+              buzei = c_buzei.
+    DO.
+      FETCH NEXT CURSOR cur_data2 INTO CORRESPONDING FIELDS OF TABLE it_bseg_cur.
+      IF sy-subrc NE 0.
+        CLOSE CURSOR cur_data2.
+        EXIT.
+      ELSE.
+        it_bseg[] = it_bseg_cur[].
+      ENDIF.
+    ENDDO.
+    IF it_bseg[] IS NOT INITIAL.
+      SORT it_bseg BY belnr.
+      PERFORM ordenar_facturas.    "Req. 7000001802 Hansel Espinoza 02.03.2018 {
+*      DELETE ADJACENT DUPLICATES FROM it_fact COMPARING vbeln.  "Comenta N2N 20/01/2023 #7000003260
+*      DELETE it_fact WHERE vbeln IS INITIAL.                    "Comenta N2N 20/01/2023 #7000003260
+*     {N2N 20/01/2023 #7000003260
+      DELETE it_fact2 WHERE vbeln IS INITIAL.
+*      N2N 20/01/2023 #7000003260}
+
+*      CHECK it_fact[] IS NOT INITIAL. "Comenta N2N 20/01/2023 #7000003260
+      CHECK it_fact2 IS NOT INITIAL.   "Agrega N2N 20/01/2023 #7000003260
+      OPEN CURSOR cur_data3 FOR
+        SELECT * FROM vbrk
+*        INTO TABLE it_vbrk
+*          FOR ALL ENTRIES IN it_fact    "Comenta N2N 20/01/2023 #7000003260
+*          WHERE vbeln EQ it_fact-vbeln  "Comenta N2N 20/01/2023 #7000003260
+          FOR ALL ENTRIES IN it_fact2    "Agrega N2N 20/01/2023 #7000003260
+          WHERE vbeln EQ it_fact2-vbeln  "Agrega N2N 20/01/2023 #7000003260
+          AND vkorg EQ c_coopi
+          AND fkart IN r_fkart
+          AND fkdat IN r_fkdat.
+      DO.
+        FETCH NEXT CURSOR cur_data3 INTO CORRESPONDING FIELDS OF TABLE it_vbrk_cur.
+        IF sy-subrc NE 0.
+          CLOSE CURSOR cur_data3.
+          EXIT.
+        ELSE.
+          it_vbrk[] = it_vbrk_cur[].
+        ENDIF.
+      ENDDO.
+      IF it_vbrk[] IS NOT INITIAL.
+        SELECT * FROM kna1
+          INTO CORRESPONDING FIELDS OF TABLE it_kna1
+          FOR ALL ENTRIES IN it_vbrk
+          WHERE kunnr EQ it_vbrk-kunrg.
+
+*            SORT it_vbrk by vbeln kunrg.    "Comenta N2N 20/01/2023 #7000003260
+*            SORT it_kna1 BY kunnr.          "Comenta N2N 20/01/2023 #7000003260
+      ENDIF.
+*      SORT it_bkpf BY belnr xblnr.
+      "} Req. 7000001802 Hansel Espinoza 02.03.2018
+      LOOP AT it_bkpf INTO wa_bkpf.
+        CLEAR: lv_string1, lv_string2, lv_string3, lv_string4, lv_string5, lv_string6,
+               lv_hbkid, lv_hktid, lv_zuonr, lv_sgtxt,
+               lv_stcd1, lv_stcd2, wa_kna1,
+               lv_name1, lv_name2, lv_name3, lv_name4,
+               lv_check_param, lv_check_param2, lv_flag,
+               wa_calc_ok, wa_calc_nn, lv_vbeln, wa_bseg, lv_vbeln_bog.
+
+        SPLIT wa_bkpf-xblnr AT '/' INTO lv_string1 lv_string2.
+        lv_hbkid = lv_string1+0(5).
+        lv_hktid = lv_string1+5(5).
+
+        READ TABLE it_bseg INTO wa_bseg WITH KEY "bukrs = wa_bkpf-bukrs
+                                                 belnr = wa_bkpf-belnr BINARY SEARCH.
+        "gjahr = wa_bkpf-gjahr BINARY SEARCH.
+        IF sy-subrc = 0.
+          READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                           hktid = lv_hktid.
+          IF sy-subrc = 0.
+            lv_check_param = 'X'.
+          ENDIF.
+
+          IF lv_check_param = 'X'. "" El registro hace Match Parcial con la parametrización de la tabla ZCDFIPARAMEFECTI
+            PERFORM comprobar_facturas USING wa_bkpf wa_bseg
+                                       CHANGING lv_check_param2
+                                                lv_vbeln
+                                                lv_vbeln_bog.
+
+          ENDIF.
+
+          IF lv_check_param2 = 'X'.  "" El registro hace Match total con la parametrización de la tabla ZCDFIPARAMEFECTI
+
+***         Identificar el pagador para consultar los datos    " Comentado Req. 7000001802 Hansel Espinoza 02.03.2018
+            CLEAR lv_length.
+            IF lv_hbkid = 'DAVI1'.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lv_string6
+                IMPORTING
+                  output = lv_string6.
+
+              lv_length  = strlen( lv_string6 ).
+              IF lv_length >= '8'.
+                lv_stcd1 = lv_string6+0(8) && '%'.
+                lv_stcd2 = lv_string6+0(7) && '%'.
+              ELSE.
+                lv_stcd1 = lv_string6 && '%'.
+                IF lv_length >= '7'.
+                  lv_stcd2 = lv_string6+0(7) && '%'.
+                ELSE.
+                  lv_stcd2 = lv_string6 && '%'.
+                ENDIF.
+              ENDIF.
+            ELSEIF lv_hbkid = 'OCCID'.
+              SPLIT lv_string6 AT '/' INTO lv_string1 lv_string2.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lv_string2
+                IMPORTING
+                  output = lv_string2.
+
+              lv_length  = strlen( lv_string2 ).
+              IF lv_length >= '7'.
+                lv_stcd1 = lv_string2+0(7) && '%'.
+              ELSE.
+                lv_stcd1 = lv_string2 && '%'.
+              ENDIF.
+            ELSEIF lv_hbkid = 'COLO2'.
+              CLEAR: lv_string5, lv_string6.
+              SPLIT wa_bseg-sgtxt AT '/' INTO lv_string5 lv_string6.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lv_string6
+                IMPORTING
+                  output = lv_string6.
+
+              lv_length  = strlen( lv_string6 ).
+              IF lv_length >= '8'.
+                lv_stcd1 = lv_string6+0(8) && '%'.
+              ELSE.
+                lv_stcd1 = lv_string6 && '%'.
+              ENDIF.
+            ELSEIF lv_hbkid = 'BOGO2'.
+              CLEAR: lv_string1, lv_string2, lv_string3.
+
+              IF lv_zuonr = '0646'.
+                SPLIT wa_bseg-sgtxt AT '/' INTO lv_string1 lv_string2.
+
+                CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                  EXPORTING
+                    input  = lv_string2
+                  IMPORTING
+                    output = lv_string2.
+
+                CLEAR lv_length.
+                lv_length  = strlen( lv_string2 ).
+                IF lv_length >= 8.
+                  lv_stcd1 = lv_string2+0(8).
+                ELSE.
+                  lv_stcd1 = lv_string2.
+                ENDIF.
+                lv_stcd1 = lv_stcd1 && '%'.
+
+              ELSEIF lv_zuonr = '0091'.
+                SPLIT wa_bseg-sgtxt AT '/' INTO lv_string1 lv_string2 lv_string3.
+
+                CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                  EXPORTING
+                    input  = lv_string1
+                  IMPORTING
+                    output = lv_string1.
+
+                CLEAR lv_length.
+                lv_length  = strlen( lv_string1 ).
+                IF lv_length >= 8.
+                  lv_stcd1 = lv_string1+0(8) && '%'.
+                ELSE.
+                  lv_stcd1 = lv_string1 && '%'.
+                ENDIF.
+
+                CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                  EXPORTING
+                    input  = lv_string3
+                  IMPORTING
+                    output = lv_string3.
+
+                CLEAR lv_length.
+                lv_length  = strlen( lv_string3 ).
+                IF lv_length >= 8.
+                  lv_stcd2 = lv_string3+0(8) && '%'.
+                ELSE.
+                  lv_stcd2 = lv_string3 && '%'.
+                ENDIF.
+              ENDIF.
+
+            ELSEIF lv_hbkid = 'SOCI3'.
+              CLEAR: lv_string1, lv_string2, lv_string3.
+              SPLIT wa_bseg-sgtxt AT '/' INTO lv_string1 lv_string2 lv_string3.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lv_string3
+                IMPORTING
+                  output = lv_string3.
+
+              CLEAR lv_length.
+              lv_length  = strlen( lv_string3 ).
+              IF lv_length >= '8'.
+                lv_stcd1 = lv_string3+0(8).
+              ELSE.
+                lv_stcd1 = lv_string3.
+              ENDIF.
+              lv_stcd1 = lv_stcd1 && '%'.
+            ELSEIF lv_hbkid = 'AGRAR'.
+              CLEAR: lv_string1, lv_string2, lv_string3.
+              SPLIT wa_bseg-sgtxt AT '/' INTO lv_string1 lv_string2 lv_string3.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lv_string3
+                IMPORTING
+                  output = lv_string3.
+
+              CLEAR lv_length.
+              lv_length  = strlen( lv_string3 ).
+              IF lv_length >= '8'.
+                lv_stcd1 = lv_string3+0(8).
+              ELSE.
+                lv_stcd1 = lv_string3.
+              ENDIF.
+              lv_stcd1 = lv_stcd1 && '%'.
+            ENDIF.
+* Fin comentario Req. 7000001802 Hansel Espinoza 05.03.2018
+            MOVE-CORRESPONDING wa_bseg TO wa_calc_ok.
+            MOVE-CORRESPONDING wa_bseg TO wa_calc_nn.
+            wa_calc_ok-budat = wa_bkpf-budat.
+            wa_calc_nn-budat = wa_bkpf-budat.
+
+            CLEAR: wa_kna1, wa_vbrk, lv_check_nit.
+
+*            Ajuste Req. 7000001802 Hansel Espinoza 05.03.2018   {
+            IF lv_vbeln_bog IS INITIAL.
+*            READ TABLE it_vbrk INTO wa_vbrk WITH KEY vbeln = lv_vbeln.       "Comenta N2N 20/01/2023 #7000003260
+              READ TABLE it_vbrk INTO wa_vbrk WITH TABLE KEY vbeln = lv_vbeln.  "Agrega  N2N 20/01/2023 #7000003260
+              IF sy-subrc EQ 0.
+*              READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_vbrk-kunrg.      "Comenta N2N 20/01/2023 #7000003260
+                READ TABLE it_kna1 INTO wa_kna1 WITH TABLE KEY kunnr = wa_vbrk-kunrg. "Agrega  N2N 20/01/2023 #7000003260
+                IF sy-subrc EQ 0.
+                  lv_check_nit = 'X'.
+                ENDIF.
+              ENDIF.
+            ELSE.
+              SPLIT lv_vbeln_bog AT '/' INTO lv_bogo1 lv_bogo2.
+*              READ TABLE it_vbrk INTO wa_vbrk WITH KEY vbeln = lv_bogo1.       "Comenta N2N 20/01/2023 #7000003260
+              READ TABLE it_vbrk INTO wa_vbrk WITH TABLE KEY vbeln = lv_bogo1.  "Agrega  N2N 20/01/2023 #7000003260
+
+              IF sy-subrc EQ 0.
+*                READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_vbrk-kunrg.      "Comenta N2N 20/01/2023 #7000003260
+                READ TABLE it_kna1 INTO wa_kna1 WITH TABLE KEY kunnr = wa_vbrk-kunrg. "Agrega  N2N 20/01/2023 #7000003260
+                IF sy-subrc EQ 0.
+                  lv_check_nit = 'X'.
+                ENDIF.
+              ELSE.
+*                READ TABLE it_vbrk INTO wa_vbrk WITH KEY vbeln = lv_bogo2.       "Comenta N2N 20/01/2023 #7000003260
+                READ TABLE it_vbrk INTO wa_vbrk WITH TABLE KEY vbeln = lv_bogo2.  "Agrega  N2N 20/01/2023 #7000003260
+                IF sy-subrc EQ 0.
+*                  READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_vbrk-kunrg.      "Comenta  N2N 20/01/2023 #7000003260
+                  READ TABLE it_kna1 INTO wa_kna1 WITH TABLE KEY kunnr = wa_vbrk-kunrg. "Agrega  N2N 20/01/2023 #7000003260
+                  IF sy-subrc EQ 0.
+                    lv_check_nit = 'X'.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+* Req. 7000001802 Hansel Espinoza 05.03.2018  }
+            IF lv_check_nit IS INITIAL.
+
+              IF wa_calc_nn-kunnr IS INITIAL.
+                wa_calc_nn-kunnr = lv_stcd1.
+              ENDIF.
+              wa_calc_nn-stcd1 = lv_stcd1.
+*              ENDIF.
+            ENDIF.
+
+
+            IF lv_check_nit IS NOT INITIAL.
+              wa_calc_ok-kunnr = wa_kna1-kunnr.
+              wa_calc_ok-stcdt = wa_kna1-stcdt.
+
+***           Partición del Nombre dependiendo si es NIT y formateo del numero fiscal
+              IF wa_calc_ok-stcdt <> 'N'.
+                PERFORM f_get_names USING wa_kna1-name1 CHANGING lv_name1 lv_name2 lv_name3 lv_name4.
+                wa_calc_ok-name1 = lv_name1.
+                wa_calc_ok-name2 = lv_name2.
+                wa_calc_ok-name3 = lv_name3.
+                wa_calc_ok-name4 = lv_name4.
+                IF wa_kna1-stcd1 CA '-'.
+                  SPLIT wa_kna1-stcd1 AT '-' INTO lv_name1 lv_name2.
+                  wa_calc_ok-stcd1 = lv_name1.
+                ELSE.
+                  wa_calc_ok-stcd1 = wa_kna1-stcd1.
+                ENDIF.
+***             Si viene con digito de verificación, se elimina
+              ELSE.
+                wa_calc_ok-name1 = wa_kna1-name1.
+***             Eliminar el guión del numero fiscal
+                IF wa_kna1-stcd1 CA '-'.
+                  REPLACE ALL OCCURRENCES OF '-' IN wa_kna1-stcd1 WITH space.
+                  CONDENSE wa_kna1-stcd1 NO-GAPS.
+                ENDIF.
+                wa_calc_ok-stcd1 = wa_kna1-stcd1.
+              ENDIF.
+
+              wa_calc_ok-profs = lk_ciiu.
+
+              lv_flag = 'X'.
+
+            ENDIF.
+
+          ENDIF.
+
+          IF lv_flag = 'X'.
+*            APPEND wa_calc_ok TO it_calc_ok.         "N2N 20/01/2023 #7000003260
+            INSERT wa_calc_ok INTO TABLE it_calc_ok.  "N2N 20/01/2023 #7000003260
+          ELSE.
+            IF wa_calc_nn IS NOT INITIAL.
+*              APPEND wa_calc_nn TO it_calc_nn.         "N2N 20/01/2023 #7000003260
+              INSERT wa_calc_nn INTO TABLE it_calc_nn. "N2N 20/01/2023 #7000003260
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+
+      IF it_calc_ok[] IS NOT INITIAL.
+        REFRESH: it_sum_ok, it_sum_50, it_calc_10.
+
+*        SORT it_calc_ok BY kunnr bukrs belnr gjahr.  N2N 20/01/2023 #7000003260
+
+**      Sumar total por cabeza
+        LOOP AT it_calc_ok INTO wa_calc_ok.
+          CLEAR wa_sum_ok.
+          wa_sum_ok-kunnr = wa_calc_ok-kunnr.
+          wa_sum_ok-wrbtr = wa_calc_ok-wrbtr.
+          COLLECT wa_sum_ok INTO it_sum_ok.
+        ENDLOOP.
+
+**      Identificar si la suma total excede los 50'000.000
+        LOOP AT it_sum_ok INTO wa_sum_ok.
+          IF wa_sum_ok-wrbtr >= p_trmult / 100.      "Agrega HRDCR 29.06.2023 #7000003290
+*         IF wa_sum_ok-wrbtr >= 500000.  ""(50'000.000/100)      "Comenta HRDCR 29.06.2023 #7000003290
+            REFRESH it_calc_ok_copy.
+*            it_calc_ok_copy[] = it_calc_ok[].  Comenta N2N 20/01/2023 #7000003260
+
+*           {N2N 20/01/2023 #7000003260
+            LOOP AT it_calc_ok INTO wa_calc_ok USING KEY skey WHERE kunnr = wa_sum_ok-kunnr.
+              APPEND wa_calc_ok TO it_calc_ok_copy.
+            ENDLOOP.
+*           N2N 20/01/2023 #7000003260}
+
+            DELETE it_calc_ok_copy WHERE kunnr <> wa_sum_ok-kunnr.    "wa_sum_50-kunnr. Req. 7000001802 Hansel Espinoza 07.03.2018
+            SORT it_calc_ok_copy BY budat DESCENDING.
+            READ TABLE it_calc_ok_copy INTO wa_calc_ok INDEX 1.
+            wa_sum_ok-budat = wa_calc_ok-budat.
+            APPEND wa_sum_ok TO it_sum_50.
+          ENDIF.
+        ENDLOOP.
+
+        IF it_sum_50[] IS NOT INITIAL.
+          LOOP AT it_sum_50 INTO wa_sum_50.
+            DELETE it_sum_ok WHERE kunnr = wa_sum_50-kunnr.
+          ENDLOOP.
+        ENDIF.
+
+**      Identificar registros individuales superiores a 10'000.000
+        REFRESH it_calc_10.
+        LOOP AT it_sum_ok INTO wa_sum_ok.
+          REFRESH it_calc_ok_copy.
+*          it_calc_ok_copy[] = it_calc_ok[]. Comenta N2N 20/01/2023 #7000003260
+
+*           {N2N 20/01/2023 #7000003260
+          LOOP AT it_calc_ok INTO wa_calc_ok USING KEY skey WHERE kunnr = wa_sum_ok-kunnr.
+            APPEND wa_calc_ok TO it_calc_ok_copy.
+          ENDLOOP.
+*           N2N 20/01/2023 #7000003260}
+          DELETE it_calc_ok_copy WHERE kunnr <> wa_sum_ok-kunnr.
+          LOOP AT it_calc_ok_copy INTO wa_calc_ok.
+            IF wa_calc_ok-wrbtr >= p_tindiv / 100.      "Agrega HRDCR 29.06.2023 #7000003290
+*            IF wa_calc_ok-wrbtr >= 100000.  ""(10'000.000/100)      "Comenta HRDCR 29.06.2023 #7000003290
+              INSERT wa_calc_ok INTO TABLE it_calc_10.   "Agrega N2N 20/01/2023 #7000003260
+*              APPEND wa_calc_ok TO it_calc_10.          "Comenta N2N 20/01/2023 #7000003260
+            ENDIF.
+
+          ENDLOOP.
+
+        ENDLOOP.
+
+      ENDIF.
+
+      IF it_calc_nn[] IS NOT INITIAL.
+
+        LOOP AT it_calc_nn ASSIGNING <fs_wa_calc_nn>.
+          REPLACE ALL OCCURRENCES OF '%' IN <fs_wa_calc_nn>-stcd1 WITH ''.
+          CONDENSE <fs_wa_calc_nn>-stcd1.
+        ENDLOOP.
+
+        REFRESH: it_sum_nn, it_sum_50_nn, it_calc_10_nn.
+
+*        SORT it_calc_nn BY stcd1 bukrs belnr gjahr. "Comenta N2N 20/01/2023 #7000003260
+
+**      Sumar total por cabeza
+        LOOP AT it_calc_nn INTO wa_calc_nn.
+          CLEAR wa_sum_nn.
+          wa_sum_nn-kunnr = wa_calc_nn-stcd1.
+          wa_sum_nn-wrbtr = wa_calc_nn-wrbtr.
+          COLLECT wa_sum_nn INTO it_sum_nn.
+        ENDLOOP.
+
+**      Identificar si la suma total excede los 50'000.000
+        LOOP AT it_sum_nn INTO wa_sum_nn.
+          IF wa_sum_nn-wrbtr >= p_trmult / 100.      "Agrega HRDCR 29.06.2023 #7000003290
+*          IF wa_sum_nn-wrbtr >= 500000.  ""(50'000.000/100)      "Comenta HRDCR 04.07.2023 #7000003290
+            REFRESH it_calc_ok_copy.
+*            it_calc_ok_copy[] = it_calc_ok[]. Comenta N2N 20/01/2023 #7000003260
+
+*           {N2N 20/01/2023 #7000003260
+            LOOP AT it_calc_ok INTO wa_calc_ok USING KEY skey WHERE kunnr = wa_sum_ok-kunnr.
+              APPEND wa_calc_ok TO it_calc_ok_copy.
+            ENDLOOP.
+*           N2N 20/01/2023 #7000003260}
+            DELETE it_calc_ok_copy WHERE kunnr <> wa_sum_nn-kunnr.
+            SORT it_calc_ok_copy BY budat DESCENDING.
+            READ TABLE it_calc_ok_copy INTO wa_calc_ok INDEX 1.
+            wa_sum_nn-budat = wa_calc_ok-budat.
+            APPEND wa_sum_nn TO it_sum_50_nn.
+          ENDIF.
+        ENDLOOP.
+
+        IF it_sum_50_nn[] IS NOT INITIAL.
+          LOOP AT it_sum_50_nn INTO wa_sum_50_nn.
+            DELETE it_sum_nn WHERE kunnr = wa_sum_50_nn-kunnr.
+
+          ENDLOOP.
+        ENDIF.
+
+**      Identificar registros individuales superiores a 10'000.000
+        REFRESH it_calc_10_nn.
+        LOOP AT it_sum_nn INTO wa_sum_nn.
+          REFRESH it_calc_nn_copy.
+*          it_calc_nn_copy[] = it_calc_nn[]. Comenta N2N 20/01/2023 #7000003260
+
+*           {N2N 20/01/2023 #7000003260
+          LOOP AT it_calc_nn INTO wa_calc_ok USING KEY skey WHERE kunnr = wa_sum_ok-kunnr.
+            APPEND wa_calc_nn TO it_calc_nn_copy.
+          ENDLOOP.
+*           N2N 20/01/2023 #7000003260}
+          DELETE it_calc_nn_copy WHERE stcd1 <> wa_sum_nn-kunnr.
+          LOOP AT it_calc_nn_copy INTO wa_calc_nn.
+            IF wa_calc_nn-wrbtr >= p_tindiv / 100.      "Agrega HRDCR 07.07.2023 #7000003290
+*            IF wa_calc_nn-wrbtr >= 100000.  ""(10'000.000/100)      "Comenta HRDCR 07.07.2023 #7000003290
+              APPEND wa_calc_nn TO it_calc_10_nn.
+            ENDIF.
+
+          ENDLOOP.
+
+        ENDLOOP.
+
+
+      ENDIF.
+
+      REFRESH it_archivo.
+
+****** ARMAR INFORMACIÓN PARA ARCHIVOS PLANOS
+      IF p_sep IS NOT INITIAL.
+***        lv_separador = c_tab.
+***      ELSE.
+        lv_separador = p_sep.
+      ENDIF.
+
+***   Justificar Cero a la derecha
+      lv_consec = lk_consec.
+      DO 9 TIMES.
+        CONCATENATE '' lv_consec INTO lv_consec SEPARATED BY space.
+      ENDDO.
+
+***   Calcular fecha de corte
+      lv_fecha_corte = lv_date_fin2+0(4) && '-' && lv_date_fin2+4(2) && '-' && lv_date_fin2+6(2).  "" Fecha de Corte
+
+***   Calcular Número total de transacciones reportadas
+      DESCRIBE TABLE it_calc_10 LINES lv_cont_10.
+      DESCRIBE TABLE it_sum_50 LINES lv_cont_50.
+      lv_cont_tot = lv_cont_10 + lv_cont_50.
+      MOVE lv_cont_tot TO lv_trans_tot.
+      CONDENSE lv_trans_tot.
+      CLEAR lv_length.
+      lv_length  = strlen( lv_trans_tot ).
+      lv_type_descr  = cl_abap_typedescr=>describe_by_data( lv_trans_tot ).
+      lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+      lv_do_calc = lv_longitud - lv_length.
+      CLEAR lv_string2.
+      lv_string2 = lv_trans_tot.
+      DO lv_do_calc TIMES.
+        CONCATENATE '' lv_string2 INTO lv_string2 SEPARATED BY space.
+      ENDDO.
+      lv_trans_tot = lv_string2.
+
+***   Generar Fin de Cabecera
+      DO 604 TIMES.       "Modifica HRDCR 07.07.2023 #7000003290
+        lv_fin_reg_cab = lv_fin_reg_cab && 'X'. "" Fin del registro
+      ENDDO.
+
+      CLEAR lv_string1.
+      IF p_sep IS INITIAL.
+
+*** Consecutivo cabecera
+        lv_valbase = 10. ""(Longitud maxima del campo a tratar)
+
+        wa_head-cons = lk_consec.
+        lv_length    = strlen( wa_head-cons ).
+        lv_result = lv_valbase - lv_length.
+        DO lv_result TIMES.
+          CONCATENATE '' wa_head-cons INTO wa_head-cons SEPARATED BY space.
+        ENDDO.
+
+        wa_head-cod_org     = lk_codorg.
+        wa_head-fecha_corte = lv_fecha_corte.
+
+        wa_head-trans_tot   = lv_trans_tot.
+        lv_length    = strlen( wa_head-trans_tot ).
+        lv_result = lv_valbase - lv_length.
+        DO lv_result TIMES.
+          CONCATENATE '' wa_head-trans_tot INTO wa_head-trans_tot SEPARATED BY space.
+        ENDDO.
+
+        wa_head-fin_reg_cab = lv_fin_reg_cab.
+        lv_char549 = wa_head.
+        lv_string1 = lv_char549.
+      ELSE.
+        CONCATENATE lk_consec lk_codorg lv_fecha_corte lv_trans_tot lv_fin_reg_cab INTO lv_string1 SEPARATED BY lv_separador.
+      ENDIF.
+
+      lv_length    = strlen( lv_string1 ).
+      APPEND lv_string1 TO it_archivo.
+
+
+***   Registros Tipo 2 - Detalle
+****  Recorrer registros superiores a 50 millones (Multiples)
+      IF it_sum_50[] IS NOT INITIAL.
+        LOOP AT it_sum_50 INTO wa_sum_ok.
+          CLEAR wa_detail.
+
+**        Campo 1: (Pendiente, se calcula al final despues de tener el total de registros)
+
+**        Campo 2
+          wa_detail-fecha_trans = wa_sum_ok-budat+0(4) && '-' && wa_sum_ok-budat+4(2) && '-' && wa_sum_ok-budat+6(2).
+
+**        Campo 3
+          WRITE wa_sum_ok-wrbtr TO wa_detail-val_trans DECIMALS 0 CURRENCY 'COP'.
+          REPLACE ALL OCCURRENCES OF '.' IN wa_detail-val_trans WITH space.
+          lv_length  = strlen( wa_detail-val_trans ).
+          lv_type_descr  = cl_abap_typedescr=>describe_by_data( wa_detail-val_trans ).
+          lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+          lv_do_calc = lv_longitud - lv_length.
+
+          DO lv_do_calc TIMES.
+            CONCATENATE '' wa_detail-val_trans INTO wa_detail-val_trans SEPARATED BY space.
+          ENDDO.
+
+**        Campo 3.1
+          wa_detail-tipo_moned = wa_calc_ok-pswsl.      "Agrega HRDCR 29.06.2023 #7000003290
+
+**        Campo 3.2
+          wa_detail-cod_ofici = wa_calc_ok-gsber.       "Agrega HRDCR 04.07.2023 #7000003290
+
+
+**        Campo 7
+          wa_detail-tip_prod = lk_tip_prod.       "Agrega HRDCR 04.07.2023 #7000003290
+
+**        Campo 8
+          wa_detail-tip_tran = lk_tip_tran.       "Agrega HRDCR 10.07.2023 #7000003290
+
+**        Campo 8.1
+          wa_detail-med_tran = lk_med_tran.      "Agrega HRDCR 04.07.2023 #7000003290
+
+          READ TABLE it_calc_ok INTO wa_calc_ok WITH KEY kunnr = wa_sum_ok-kunnr.
+          IF sy-subrc = 0.
+**        Campo 9
+*            wa_detail-num_cta = wa_calc_ok-stcd1.
+            wa_detail-num_cta = wa_calc_ok-kunnr.
+
+**        Campo 10
+            CASE wa_calc_ok-stcdt.
+              WHEN 'C'.
+                wa_detail-tip_id = '13'.
+              WHEN 'E'.
+                wa_detail-tip_id = '21'.
+              WHEN 'I'.
+                wa_detail-tip_id = '12'.
+              WHEN 'N'.
+                wa_detail-tip_id = '31'.
+              WHEN 'P'.
+                wa_detail-tip_id = '41'.
+              WHEN 'R'.
+                wa_detail-tip_id = '11'.
+              WHEN 'T'.
+                wa_detail-tip_id = '12'.
+              WHEN OTHERS.
+                wa_detail-tip_id = '00'.
+            ENDCASE.
+
+            IF wa_calc_ok-stcdt <> 'N'.
+**        Campo 11
+              wa_detail-tip_cta = wa_calc_ok-stcd1.
+
+**       Campo 11.1
+              wa_detail-dig_verif = '-1'.       "Agrega HRDCR 30.06.2023 #7000003290
+
+**         Ini HRDCR 04.07.2023 #7000003290
+**       Campo 11.2 Ajuste Daniel Cabrera Rincon
+              CONCATENATE wa_calc_ok-name1 wa_calc_ok-name2 wa_calc_ok-name3 wa_calc_ok-name4 INTO lv_nombrecom SEPARATED BY SPACE.
+              wa_detail-nombrecom = lv_nombrecom.
+**      Fin HRDCR 04.07.2023 #7000003290
+
+**         Ini HRDCR 05.07.2023 #7000003290
+**        Campo 12 Ajuste Daniel Cabrera
+              ""wa_detail-apellido1 = wa_calc_ok-name1.
+
+**        Campo 13 Ajuste Daniel Cabrera
+              ""wa_detail-apellido2 = wa_calc_ok-name2.
+
+**        Campo 14 Ajuste Daniel Cabrera
+              ""wa_detail-nombre1 = wa_calc_ok-name3.
+
+**        Campo 15 Ajuste Daniel Cabrera
+              ""wa_detail-nombre2 = wa_calc_ok-name4.
+**      Fin HRDCR 05.07.2023 #7000003290
+
+**        Campo 16
+              wa_detail-razon_social = lk_razsoci.      "Modifica HRDCR 04.07.2023 #7000003290
+
+            ELSE.
+**        Campo 11
+              wa_detail-tip_cta = wa_calc_ok-stcd1.
+
+**       Campo 11.1
+**         Ini HRDCR 05.07.2023 #7000003290
+              lv_stringprueba = wa_detail-tip_cta.
+              CONDENSE lv_stringprueba NO-GAPS.
+              lv_length4 = strlen( lv_stringprueba ).
+              lv_length4 = lv_length4 - 1.
+              lv_caracter = lv_stringprueba+lv_length4(1).
+              CONCATENATE '0' lv_caracter INTO wa_detail-dig_verif.
+
+**        Campo 11
+              wa_detail-tip_cta = wa_calc_ok-stcd1+0(lv_length4).  "prueba dcr
+
+
+**      Fin HRDCR 05.07.2023 #7000003290
+
+**       Campo 11.2
+              wa_detail-nombrecom ='-1'.      "Agrega HRDCR 06.07.2023 #7000003290
+
+**        Campo 16
+              wa_detail-razon_social = wa_calc_ok-name1.
+
+            ENDIF.
+
+**        Campo 17
+              wa_detail-cod_dep = lk_cod_dep.      "Modifica HRDCR 07.07.2023 #7000003290
+
+**        Campo 12
+
+              wa_detail-apelltit = lk_apelltit.      "Agrega HRDCR 10.07.2023 #7000003290
+
+**        Campo 17
+            wa_detail-actividad = wa_calc_ok-profs.
+
+**        Campo 18
+            wa_detail-ingreso = lk_ingreso.
+            lv_length  = strlen( wa_detail-ingreso ).
+            lv_type_descr  = cl_abap_typedescr=>describe_by_data( wa_detail-ingreso ).
+            lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+            lv_do_calc = lv_longitud - lv_length.
+            DO lv_do_calc TIMES.
+              CONCATENATE '' wa_detail-ingreso INTO wa_detail-ingreso SEPARATED BY space.
+            ENDDO.
+
+            APPEND wa_detail TO it_detail.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+
+****  Recorrer registros superiores a 10 millones (Individuales)
+      IF it_calc_10[] IS NOT INITIAL.
+        LOOP AT it_calc_10 INTO wa_calc_ok.
+          CLEAR wa_detail.
+
+**        Campo 1: (Pendiente, se calcula al final despues de tener el total de registros)
+
+**        Campo 2
+          wa_detail-fecha_trans = wa_calc_ok-budat+0(4) && '-' && wa_calc_ok-budat+4(2) && '-' && wa_calc_ok-budat+6(2).
+
+**        Campo 3
+          WRITE wa_calc_ok-wrbtr TO wa_detail-val_trans DECIMALS 0 CURRENCY 'COP'.
+          REPLACE ALL OCCURRENCES OF '.' IN wa_detail-val_trans WITH space.
+          lv_length  = strlen( wa_detail-val_trans ).
+          lv_type_descr  = cl_abap_typedescr=>describe_by_data( wa_detail-val_trans ).
+          lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+          lv_do_calc = lv_longitud - lv_length.
+
+          DO lv_do_calc TIMES.
+            CONCATENATE '' wa_detail-val_trans INTO wa_detail-val_trans SEPARATED BY space.
+          ENDDO.
+
+**        Campo 3.1
+          wa_detail-tipo_moned = wa_calc_ok-pswsl.     "Agrega HRDCR 29.06.2023 #7000003290
+
+**        Campo 3.2
+          wa_detail-cod_ofici = wa_calc_ok-gsber.      "Agrega HRDCR 30.06.2023 #7000003290
+
+
+
+**        Campo 7
+          wa_detail-tip_prod = lk_tip_prod.      "Agrega HRDCR 06.07.2023 #7000003290
+
+**        Campo 8
+          wa_detail-tip_tran = lk_tip_tran.      "Agrega HRDCR 06.07.2023 #7000003290
+
+**        Campo 8.1
+          wa_detail-med_tran = lk_med_tran.       "Agrega HRDCR 06.07.2023 #7000003290
+
+
+**        Campo 6
+**          wa_detail-cod_dep = lk_cod_dep.      "Comenta HRDCR 07.07.2023 #7000003290
+
+**        Campo 9
+**          wa_detail-num_cta = wa_calc_ok-stcd1.
+          wa_detail-num_cta = wa_calc_ok-kunnr.
+
+**        Campo 10
+          CASE wa_calc_ok-stcdt.
+            WHEN 'C'.
+              wa_detail-tip_id = '13'.
+            WHEN 'E'.
+              wa_detail-tip_id = '21'.
+            WHEN 'I'.
+              wa_detail-tip_id = '12'.
+            WHEN 'N'.
+              wa_detail-tip_id = '31'.
+            WHEN 'P'.
+              wa_detail-tip_id = '41'.
+            WHEN 'R'.
+              wa_detail-tip_id = '11'.
+            WHEN 'T'.
+              wa_detail-tip_id = '12'.
+            WHEN OTHERS.
+              wa_detail-tip_id = '00'.
+          ENDCASE.
+
+          IF wa_calc_ok-stcdt <> 'N'.
+**        Campo 11
+            wa_detail-tip_cta = wa_calc_ok-stcd1.
+
+**       Campo 11.1
+            wa_detail-dig_verif = '-1'.      "Agrega HRDCR 30.06.2023 #7000003290
+
+
+**         Ini HRDCR 04.07.2023 #7000003290
+**       Campo 11.2
+              CONCATENATE wa_calc_ok-name1 wa_calc_ok-name2 wa_calc_ok-name3 wa_calc_ok-name4 INTO lv_nombrecom SEPARATED BY SPACE.
+              wa_detail-nombrecom = lv_nombrecom.
+**      Fin HRDCR 04.07.2023 #7000003290
+
+**         Ini HRDCR 06.07.2023 #7000003290
+**        Campo 12
+            "wa_detail-apellido1 = wa_calc_ok-name1.
+
+**        Campo 13
+            "wa_detail-apellido2 = wa_calc_ok-name2.
+
+**        Campo 14
+            "wa_detail-nombre1 = wa_calc_ok-name3.
+
+**        Campo 15
+            "wa_detail-nombre2 = wa_calc_ok-name4.
+**      Fin HRDCR 06.07.2023 #7000003290
+
+**        Campo 16
+              wa_detail-razon_social = lk_razsoci.      "Modifica HRDCR 10.07.2023 #7000003290
+
+**       Campo 11.1
+            wa_detail-dig_verif2 = '-1'.      "Modifica HRDCR 10.07.2023 #7000003290
+
+**      Campo 13
+          wa_detail-nombrecom2 = lv_nombrecom.      "Agrega HRDCR 10.07.2023 #7000003290
+
+**      Campo 14
+          wa_detail-razon_social2 = lk_razsoci.
+
+          ELSE.
+**        Campo 11
+            wa_detail-tip_cta = wa_calc_ok-stcd1.
+
+**       Campo 11.1
+**         Ini HRDCR 10.07.2023 #7000003290
+            lv_stringprueba = wa_detail-tip_cta.
+            CONDENSE lv_stringprueba NO-GAPS.
+            lv_length4 = strlen( lv_stringprueba ).
+            lv_length4 = lv_length4 - 1.
+            lv_caracter = lv_stringprueba+lv_length4(1).
+            CONCATENATE '0' lv_caracter INTO wa_detail-dig_verif.
+
+**        Campo 11
+              wa_detail-tip_cta = wa_calc_ok-stcd1+0(lv_length4).  "prueba dcr
+**      Fin HRDCR 10.07.2023 #7000003290
+
+**       Campo 11.2
+              wa_detail-nombrecom ='-1'.      "Agrega HRDCR 29.06.2023 #7000003290
+
+**        Campo 16
+            wa_detail-razon_social = wa_calc_ok-name1.
+
+**       Campo  17
+            wa_detail-dig_verif2 = wa_detail-dig_verif.       "Agrega HRDCR 30.06.2023 #7000003290
+
+**       Campo 18
+          wa_detail-nombrecom2 ='-1'.       "Agrega HRDCR 06.07.2023 #7000003290
+
+**       Campo 19
+          wa_detail-razon_social2 = wa_calc_ok-name1.
+
+          ENDIF.
+
+**        Campo 17
+              wa_detail-cod_dep = lk_cod_dep.       "Modifica HRDCR 29.06.2023 #7000003290
+
+**        Campo 12
+              wa_detail-apelltit = lk_apelltit.      "Agrega HRDCR 07.07.2023 #7000003290
+
+**        Campo 12
+              wa_detail-apelltit2 = lk_apelltit.      "Agrega HRDCR 29.06.2023 #7000003290
+
+**        Campo 17
+          wa_detail-actividad = wa_calc_ok-profs.
+
+**        Campo 18
+          wa_detail-ingreso = lk_ingreso.
+          lv_length  = strlen( wa_detail-ingreso ).
+          lv_type_descr  = cl_abap_typedescr=>describe_by_data( wa_detail-ingreso ).
+          lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+          lv_do_calc = lv_longitud - lv_length.
+          DO lv_do_calc TIMES.
+            CONCATENATE '' wa_detail-ingreso INTO wa_detail-ingreso SEPARATED BY space.
+          ENDDO.
+
+**        Campo 19
+          wa_detail-tip_id2 = wa_detail-tip_id.
+
+**        Campo 20
+          wa_detail-tip_cta2 = wa_detail-tip_cta.
+
+
+          APPEND wa_detail TO it_detail.
+
+        ENDLOOP.
+      ENDIF.
+
+      IF it_detail[] IS NOT INITIAL.
+        SORT it_detail BY nombrecom.
+
+        CLEAR lv_cont_tot.
+        LOOP AT it_detail ASSIGNING <fs_wa_detail>.
+          lv_cont_tot = lv_cont_tot + 1.
+          <fs_wa_detail>-cons_reg = lv_cont_tot.
+
+          lv_length  = strlen( <fs_wa_detail>-cons_reg ).
+          lv_type_descr  = cl_abap_typedescr=>describe_by_data( <fs_wa_detail>-cons_reg ).
+          lv_longitud = ( lv_type_descr->length ) / 2.
+***   Calcular espacios en blanco que faltan y rellenar variable
+          lv_do_calc = lv_longitud - lv_length.
+          DO lv_do_calc TIMES.
+            CONCATENATE '' <fs_wa_detail>-cons_reg INTO <fs_wa_detail>-cons_reg SEPARATED BY space.
+          ENDDO.
+        ENDLOOP.
+        LOOP AT it_detail INTO wa_detail.
+          CLEAR lv_string1.
+          IF p_sep IS INITIAL.
+            CLEAR wa_detail_char.
+            MOVE-CORRESPONDING wa_detail TO wa_detail_char.
+
+            "CLEAR: wa_detail_char-cons_reg, wa_detail_char-val_trans, wa_detail_char-cod_dep , wa_detail_char-ingreso.      "Comenta HRDCR 04.07.2023 #7000003290
+            CLEAR: wa_detail_char-cons_reg, wa_detail_char-val_trans, wa_detail_char-ingreso.      "Agrega HRDCR 04.07.2023 #7000003290
+
+            lv_valbase = 10. ""(Longitud maxima del campo a tratar)
+            wa_detail_char-cons_reg = wa_detail-cons_reg.
+            lv_length    = strlen( wa_detail_char-cons_reg ).
+            lv_result = lv_valbase - lv_length.
+            DO lv_result TIMES.
+              CONCATENATE '' wa_detail_char-cons_reg INTO wa_detail_char-cons_reg SEPARATED BY space.
+            ENDDO.
+
+            lv_valbase = 20. ""(Longitud maxima del campo a tratar)
+            wa_detail_char-val_trans = wa_detail-val_trans.
+            lv_length    = strlen( wa_detail_char-val_trans ).
+            lv_result = lv_valbase - lv_length.
+            DO lv_result TIMES.
+              CONCATENATE '' wa_detail_char-val_trans INTO wa_detail_char-val_trans SEPARATED BY space.
+            ENDDO.
+
+**         Ini HRDCR 05.07.2023 #7000003290
+            "lv_valbase = 5. ""(Longitud maxima del campo a tratar)
+            "wa_detail_char-cod_dep = wa_detail-cod_dep.
+            "lv_length    = strlen( wa_detail_char-cod_dep ).
+            "lv_result = lv_valbase - lv_length.
+            "DO lv_result TIMES.
+            "  CONCATENATE '' wa_detail_char-cod_dep INTO wa_detail_char-cod_dep SEPARATED BY space.
+            "ENDDO.
+**      Fin HRDCR 05.07.2023 #7000003290
+
+            lv_valbase = 20. ""(Longitud maxima del campo a tratar)
+            wa_detail_char-ingreso = wa_detail-ingreso.
+            lv_length    = strlen( wa_detail_char-ingreso ).
+            lv_result = lv_valbase - lv_length.
+            DO lv_result TIMES.
+              CONCATENATE '' wa_detail_char-ingreso INTO wa_detail_char-ingreso SEPARATED BY space.
+            ENDDO.
+
+
+            lv_char549 = wa_detail_char.
+
+            lv_char548 = lv_char549.
+            CLEAR lv_char549.
+            CONCATENATE lv_char548 c_tab INTO lv_char549 RESPECTING BLANKS.
+            lv_string1 = lv_char549.
+
+            lv_length2 = strlen( lv_string1 ).
+          ELSE.
+            CONCATENATE wa_detail-cons_reg
+                        wa_detail-fecha_trans
+                        wa_detail-val_trans
+                        wa_detail-tipo_moned
+                        wa_detail-cod_ofici       "Agrega HRDCR 10.07.2023 #7000003290
+                        "wa_detail-tipo_mon       "Comenta HRDCR 05.07.2023 #7000003290
+                        "wa_detail-cod_of        "Comenta HRDCR 05.07.2023 #7000003290
+                        wa_detail-tip_prod       "Modifica HRDCR 04.07.2023 #7000003290
+                        wa_detail-tip_tran      "Modifica HRDCR 04.07.2023 #7000003290
+                        wa_detail-med_tran      "Modifica HRDCR 04.07.2023 #7000003290
+                        wa_detail-num_cta
+                        wa_detail-tip_id
+                        wa_detail-tip_cta
+                        wa_detail-dig_verif      "Agrega HRDCR 06.07.2023 #7000003290
+                        wa_detail-nombrecom       "Agrega HRDCR 06.07.2023 #7000003290
+                        "wa_detail-apellido1      "Comenta HRDCR 07.07.2023 #7000003290
+                        "wa_detail-apellido2      "Comenta HRDCR 07.07.2023 #7000003290
+                        "wa_detail-nombre1       "Comenta HRDCR 07.07.2023 #7000003290
+                        "wa_detail-nombre2       "Comenta HRDCR 07.07.2023 #7000003290
+                        wa_detail-apelltit      "Agrega HRDCR 04.07.2023 #7000003290
+                        wa_detail-razon_social
+                        wa_detail-cod_dep      "Agrega HRDCR 04.07.2023 #7000003290
+                        wa_detail-tip_id2
+                        wa_detail-tip_cta2
+                        wa_detail-dig_verif2       "Agrega HRDCR 04.07.2023 #7000003290
+                        wa_detail-nombrecom2       "Agrega HRDCR 07.07.2023 #7000003290
+                        wa_detail-apelltit2        "Agrega HRDCR 07.07.2023 #7000003290
+                        wa_detail-razon_social2       "Agrega HRDCR 04.07.2023 #7000003290
+                        wa_detail-actividad
+                        wa_detail-ingreso
+                        wa_detail-apellido1_2
+                        wa_detail-apellido2_2
+                        wa_detail-nombre1_2
+                        wa_detail-nombre2_2
+                        INTO lv_string1 SEPARATED BY lv_separador.
+          ENDIF.
+          APPEND lv_string1 TO it_archivo.
+        ENDLOOP.
+
+***   Registros Tipo 3 - Fin Archivo
+***        lv_fin_archivo = lv_fin_reg_cab.
+
+        CLEAR lv_fin_archivo.
+        DO 614 TIMES.      "Modifica HRDCR 07.07.2023 #7000003290
+          lv_fin_archivo = lv_fin_archivo && 'X'. "" Fin del registro
+        ENDDO.
+
+        CLEAR lv_string1.
+        IF p_sep IS INITIAL.
+          lv_valbase = 10. ""(Longitud maxima del campo a tratar)
+
+          wa_tail-cons        = lk_consec.
+          lv_length    = strlen( wa_tail-cons ).
+          lv_result = lv_valbase - lv_length.
+          DO lv_result TIMES.
+            CONCATENATE '' wa_tail-cons INTO wa_tail-cons SEPARATED BY space.
+          ENDDO.
+
+          wa_tail-cod_org     = lk_cod_ent.
+
+          lv_valbase = 10.  ""(Longitud maxima del campo a tratar)
+          wa_tail-trans_tot   = wa_head-trans_tot.
+          lv_length    = strlen( wa_tail-trans_tot ).
+          lv_result = lv_valbase - lv_length.
+          DO lv_result TIMES.
+            CONCATENATE '' wa_tail-trans_tot INTO wa_tail-trans_tot SEPARATED BY space.
+          ENDDO.
+
+          wa_tail-fin_reg_cab = lv_fin_archivo.
+
+          lv_char549 = wa_tail.
+          lv_string1 = lv_char549.
+
+*******
+          CLEAR: lv_string1, lv_string2.
+
+          CONCATENATE wa_tail-cod_org wa_tail-trans_tot lv_fin_archivo INTO lv_string2 RESPECTING BLANKS.
+
+          CONCATENATE wa_tail-cons lv_string2 INTO lv_string1 RESPECTING BLANKS.
+
+        ELSE.
+          CONCATENATE lk_consec lk_cod_ent lv_trans_tot lv_fin_archivo INTO lv_string1 SEPARATED BY lv_separador.
+        ENDIF.
+
+        lv_length    = strlen( lv_string1 ).
+        APPEND lv_string1 TO it_archivo.
+
+
+**        PERFORM f_load_file USING it_archivo p_root  "Comenta HRDCR 16.07.2023 #7000003290
+**                            CHANGING lv_name_file.   "Comenta HRDCR 16.07.2023 #7000003290
+
+       PERFORM f_load_file USING it_archivo p_lroot  "Agrega HRDCR 16.07.2023 #7000003290
+                            CHANGING lv_name_file.   "Agrega HRDCR 16.07.2023 #7000003290
+
+
+*        PERFORM f_load_file2 USING lv_name_file p_root2.     "Comenta HRDCR 14.07.2023 #7000003290
+
+
+      ELSE.
+        MESSAGE 'No hay movimientos de efectivo para el periodo ingresado'(004) TYPE 'E'.
+      ENDIF.
+    ELSE.
+      MESSAGE 'No se encontraron registros para los parámetros ingresados'(005) TYPE 'E'.
+    ENDIF.
+  ELSE.
+    MESSAGE text-005 TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_GET_NAMES
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_WA_KNA1_NAME1  text
+*      <--P_LV_NAME1  text
+*      <--P_LV_NAME2  text
+*      <--P_LV_NAME3  text
+*      <--P_LV_NAME4  text
+*----------------------------------------------------------------------*
+FORM f_get_names  USING    p_wa_kna1_name1 TYPE kna1-name1
+                  CHANGING p_lv_name1 TYPE kna1-name1
+                           p_lv_name2 TYPE kna1-name1
+                           p_lv_name3 TYPE kna1-name1
+                           p_lv_name4 TYPE kna1-name1.
+
+  DATA: it_string TYPE TABLE OF string,
+        lv_cont   TYPE i,
+        lv_string TYPE string.
+
+  SPLIT p_wa_kna1_name1 AT space INTO TABLE it_string.
+  DESCRIBE TABLE it_string LINES lv_cont.
+  IF lv_cont = 1.
+    p_lv_name1 = p_wa_kna1_name1.
+  ELSEIF lv_cont = 2.
+    LOOP AT it_string INTO lv_string.
+      IF sy-tabix = 1.
+        p_lv_name1 = lv_string.
+      ELSE.
+        p_lv_name3 = lv_string.
+      ENDIF.
+    ENDLOOP.
+  ELSE.
+    LOOP AT it_string INTO lv_string.
+      IF sy-tabix = 1.
+        p_lv_name1 = lv_string.
+      ELSEIF sy-tabix = 2.
+        p_lv_name2 = lv_string.
+      ELSEIF sy-tabix = 3.
+        p_lv_name3 = lv_string.
+      ELSEIF sy-tabix = 4.
+        p_lv_name4 = lv_string.
+      ELSE.
+        CONCATENATE p_lv_name4 lv_string INTO p_lv_name4 SEPARATED BY space.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_LOAD_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_IT_ARCHIVO  text
+*----------------------------------------------------------------------*
+
+*PRUEBA DANIEL CABRERA
+
+FORM f_load_file  USING  p_it_archivo LIKE it_archivo
+                         p_p_root TYPE localfile      "Modifica HRDCR 16.07.2023 #7000003290
+                  CHANGING p_name_file TYPE string.
+
+  DATA: lv_system   TYPE sy-sysid,
+        lv_gjahr(4) TYPE c,
+*        lv_per(4)   TYPE c, "Comenta BN2NMCBARRET 14.02.2023 #7000003261
+        lv_per(5)   TYPE c,  "BN2NMCBARRET 14.02.2023 #7000003261
+        lv_caracter TYPE string,
+        lv_carac2 TYPE string, "Agrega HRDCR 11.07.2023 #7000003290
+        lv_genpla   TYPE path-pathextern.
+
+  lv_system = sy-sysid.
+  lv_gjahr = p_gjahr.
+  lv_carac2 = lv_gjahr+2(2). "Agrega HRDCR 14.07.2023 #7000003290
+
+* Ini BN2NMCBARRET 14.02.2023 #7000003261
+  CONCATENATE lc_mes p_month INTO lv_per.
+* Fin BN2NMCBARRET 14.02.2023 #7000003261
+
+  ##NO_TEXT
+*  CONCATENATE lv_system  '_' sy-datum '_' sy-uzeit '_' lv_per '_' lv_gjahr '.txt' INTO p_name_file."Comenta HRDCR 10.07.2023 #7000003290
+  CONCATENATE 'TRSO' sy-datum sy-uzeit p_month lv_carac2 '.txt' INTO p_name_file."Agrega HRDCR 10.07.2023 #7000003290
+
+* Ini BN2NMCBARRET 14.02.2023 #7000003261
+  PERFORM f_local_load_file USING it_archivo
+                                  p_name_file
+                                  p_lroot.
+* Fin BN2NMCBARRET 14.02.2023 #7000003261
+
+  CONCATENATE p_p_root '/' p_name_file INTO  lv_genpla.
+  OPEN DATASET lv_genpla FOR OUTPUT IN TEXT MODE ENCODING UTF-8 WITH BYTE-ORDER MARK.
+
+  CLOSE DATASET lv_genpla.
+
+**         Ini HRDCR 16.07.2023 #7000003290
+  IF sy-subrc = 0.
+      SKIP 1.
+      WRITE: 'Archivo generado con éxito'(007), '' , lv_genpla.
+  ELSE.
+    SKIP 1.
+    WRITE: 'No se pudo generar archivo'(006), sy-datum, sy-uzeit.
+  ENDIF.
+**      Fin HRDCR 16.07.2023 #7000003290
+
+
+
+  CONCATENATE lv_system  '_' sy-datum '_' sy-uzeit '_' lv_per '_' lv_gjahr '_LOG' '.txt' INTO p_name_file.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_LOAD_FILE2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_load_file2 USING p_name_file TYPE string
+                        p_p_root    TYPE eseftappl.
+
+  DATA: lt_string   TYPE TABLE OF string,
+        lv_string   TYPE          string,
+        lv_char(8)  TYPE c,
+        lv_cont_10  TYPE i,
+        lv_cont_50  TYPE i,
+        lv_cont10nn TYPE i,
+        lv_cont50nn TYPE i,
+        lv_genpla   TYPE path-pathextern,
+        lv_tindiv  TYPE string,      "Agrega HRDCR 10.07.2023 #7000003290
+        lv_trmult  TYPE string.      "Agrega HRDCR 10.07.2023 #7000003290
+
+  DATA: wa_calc_10_nn LIKE LINE OF it_calc_10_nn,
+        wa_sum_50_nn  LIKE LINE OF  it_sum_50_nn,
+        wa_sum_50     LIKE LINE OF it_sum_50,
+        wa_calc_10    LIKE LINE OF it_calc_10.
+***   Calcular Número total de transacciones reportadas
+  DESCRIBE TABLE it_calc_10    LINES lv_cont_10.
+  DESCRIBE TABLE it_sum_50     LINES lv_cont_50.
+  DESCRIBE TABLE it_calc_10_nn LINES lv_cont10nn.
+  DESCRIBE TABLE it_sum_50_nn  LINES lv_cont50nn.
+
+  lv_char = lv_cont_10.
+  CONCATENATE 'Registros individuales:'(011) lv_char INTO lv_string SEPARATED BY space.
+  APPEND lv_string TO lt_string.
+  IF it_calc_10[] IS NOT INITIAL.
+    CLEAR lv_string.
+    APPEND lv_string TO lt_string.
+    lv_tindiv = p_tindiv.      "Agrega HRDCR 10.07.2023 #7000003290
+    CONCATENATE 'Documentos que exceden' lv_tindiv 'por registro individual:' INTO lv_string SEPARATED BY SPACE.      "Modifica HRDCR 10.07.2023 #7000003290
+    APPEND lv_string TO lt_string.
+    LOOP AT it_calc_10 INTO wa_calc_10.
+*      MOVE wa_calc_10-kunnr TO lv_string.
+      CONCATENATE 'Doc.:' wa_calc_10-belnr 'N° Cliente:' wa_calc_10-kunnr INTO lv_string SEPARATED BY space.
+      APPEND lv_string TO lt_string.
+    ENDLOOP.
+  ENDIF.
+
+  CLEAR lv_string.
+  lv_char = lv_cont_50.
+  CONCATENATE 'Registros múltiples:'(010) lv_char INTO lv_string SEPARATED BY space.
+  APPEND lv_string TO lt_string.
+
+  CLEAR lv_string.
+  APPEND lv_string TO lt_string.
+
+  IF it_sum_50[] IS NOT INITIAL.
+    CLEAR lv_string.
+    APPEND lv_string TO lt_string.
+    lv_trmult = p_trmult.      "Agrega HRDCR 10.07.2023 #7000003290
+    CONCATENATE 'Números de identificación que exceden' lv_trmult 'por registros multiples:' INTO lv_string SEPARATED BY SPACE.      "Modifica HRDCR 10.07.2023 #7000003290
+    APPEND lv_string TO lt_string.
+    LOOP AT it_sum_50 INTO wa_sum_50.
+      MOVE wa_sum_50-kunnr TO lv_string.
+      APPEND lv_string TO lt_string.
+    ENDLOOP.
+  ENDIF.
+
+
+  IF lv_cont10nn > 0.
+    CLEAR lv_string.
+    lv_char = lv_cont10nn.
+    CONCATENATE 'Registros individuales sin encontrar en el sistema:'(013) lv_char INTO lv_string SEPARATED BY space.
+    APPEND lv_string TO lt_string.
+  ENDIF.
+
+  IF lv_cont50nn > 0.
+    CLEAR lv_string.
+    lv_char = lv_cont50nn.
+    CONCATENATE 'Registros múltiples sin encontrar en el sistema:'(012) lv_char INTO lv_string SEPARATED BY space.
+    APPEND lv_string TO lt_string.
+  ENDIF.
+
+  CLEAR lv_string.
+  APPEND lv_string TO lt_string.
+
+  IF ( lv_cont10nn > 0 ) OR ( lv_cont50nn > 0 ).
+    CLEAR lv_string.
+    lv_string = 'Números de identificación no encontrados en el sistema:'(014).
+    APPEND lv_string TO lt_string.
+
+    LOOP AT it_calc_10_nn INTO wa_calc_10_nn.
+      lv_string = wa_calc_10_nn-stcd1.
+      APPEND lv_string TO lt_string.
+    ENDLOOP.
+
+    LOOP AT it_sum_50_nn INTO wa_sum_50_nn.
+      lv_string = wa_sum_50_nn-kunnr.
+      APPEND lv_string TO lt_string.
+    ENDLOOP.
+  ENDIF.
+
+  CONCATENATE p_p_root '/' p_name_file INTO  lv_genpla.
+  OPEN DATASET lv_genpla FOR OUTPUT IN TEXT MODE ENCODING UTF-8 WITH BYTE-ORDER MARK.
+  IF sy-subrc EQ 0.
+    LOOP AT lt_string INTO lv_string.
+      TRANSFER lv_string TO lv_genpla.
+    ENDLOOP.
+  ELSE.
+    SKIP 1.
+    WRITE: 'No se pudo generar Log archivo de efectivo'(008), sy-datum, sy-uzeit.
+  ENDIF.
+  CLOSE DATASET lv_genpla.
+  IF sy-subrc = 0.
+    SKIP 1.
+    WRITE: 'Archivo Log de efectivo generado con éxito'(009), '' , lv_genpla.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_GET_SET
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_get_set .
+
+  DATA: lv_setid  TYPE          sethier-setid,
+        lv_setid2 TYPE          sethier-setid,
+        lt_rgsbv  TYPE TABLE OF rgsbv,
+        wa_rgsbv  LIKE LINE OF  lt_rgsbv,
+        lt_rgsbv2 TYPE TABLE OF rgsbv,
+        wa_rgsbv2 LIKE LINE OF  lt_rgsbv2.
+
+** Consultar Set de Datos para obtener la ruta del Reporte
+  CALL FUNCTION 'G_SET_GET_ID_FROM_NAME'
+    EXPORTING
+      shortname                = 'ZRUTA_RPT_EFECTIVO'
+    IMPORTING
+      new_setid                = lv_setid
+    EXCEPTIONS
+      no_set_found             = 1
+      no_set_picked_from_popup = 2
+      wrong_class              = 3
+      wrong_subclass           = 4
+      table_field_not_found    = 5
+      fields_dont_match        = 6
+      set_is_empty             = 7
+      formula_in_set           = 8
+      set_is_dynamic           = 9
+      OTHERS                   = 10.
+  IF sy-subrc = 0.
+    CALL FUNCTION 'G_SET_FETCH'
+      EXPORTING
+        setnr           = lv_setid
+      TABLES
+        set_lines_basic = lt_rgsbv
+      EXCEPTIONS
+        no_authority    = 1
+        set_is_broken   = 2
+        set_not_found   = 3
+        OTHERS          = 4.
+  ENDIF.
+  IF lt_rgsbv[] IS NOT INITIAL.
+    LOOP AT lt_rgsbv INTO wa_rgsbv.
+      CONDENSE wa_rgsbv-title NO-GAPS.
+*      CONCATENATE p_root wa_rgsbv-title INTO p_root.      "Comenta HRDCR 10.07.2023 #7000003290
+    ENDLOOP.
+  ENDIF.
+
+** Consultar Set de Datos para obtener la ruta del LOG del Reporte
+  CALL FUNCTION 'G_SET_GET_ID_FROM_NAME'
+    EXPORTING
+      shortname                = 'ZRUTA_RPT_EFECTIVO_LOG'
+    IMPORTING
+      new_setid                = lv_setid2
+    EXCEPTIONS
+      no_set_found             = 1
+      no_set_picked_from_popup = 2
+      wrong_class              = 3
+      wrong_subclass           = 4
+      table_field_not_found    = 5
+      fields_dont_match        = 6
+      set_is_empty             = 7
+      formula_in_set           = 8
+      set_is_dynamic           = 9
+      OTHERS                   = 10.
+  IF sy-subrc = 0.
+    CALL FUNCTION 'G_SET_FETCH'
+      EXPORTING
+        setnr           = lv_setid2
+      TABLES
+        set_lines_basic = lt_rgsbv2
+      EXCEPTIONS
+        no_authority    = 1
+        set_is_broken   = 2
+        set_not_found   = 3
+        OTHERS          = 4.
+  ENDIF.
+  IF lt_rgsbv[] IS NOT INITIAL.
+    LOOP AT lt_rgsbv2 INTO wa_rgsbv2.
+      CONDENSE wa_rgsbv2-title NO-GAPS.
+*      CONCATENATE p_root2 wa_rgsbv2-title INTO p_root2.      "Comenta HRDCR 11.07.2023 #7000003290
+    ENDLOOP.
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ORDENAR_FACTURAS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM ordenar_facturas.
+  DATA: wa_r_date           LIKE LINE OF r_date,
+        wa_bkpf             LIKE LINE OF it_bkpf,
+        wa_bseg             LIKE LINE OF it_bseg,
+        wa_zcdfiparamefecti LIKE LINE OF it_zcdfiparamefecti,
+        wa_kna1             LIKE LINE OF it_kna1,
+**        wa_lfa1             LIKE LINE OF it_lfa1,
+        wa_knvp             LIKE LINE OF it_knvp,
+        wa_calc_ok          LIKE LINE OF it_calc_ok,
+        wa_calc_nn          LIKE LINE OF it_calc_nn,
+        wa_sum_ok           LIKE LINE OF it_sum_ok,
+        wa_sum_nn           LIKE LINE OF it_sum_nn,
+        wa_sum_50           LIKE LINE OF it_sum_50,
+        wa_sum_50_nn        LIKE LINE OF it_sum_50_nn.
+
+  DATA: lv_date_ini1       TYPE datum,
+        lv_date_ini2       TYPE datum,
+        lv_date_fin1       TYPE datum,
+        lv_date_fin2       TYPE datum,
+        lv_mes_1(2)        TYPE c,
+        lv_mes_2(2)        TYPE c,
+        lv_string1         TYPE string,
+        lv_string2         TYPE string,
+        lv_string3         TYPE string,
+        lv_string4         TYPE string,
+        lv_string5         TYPE string,
+        lv_string6         TYPE string,
+        lv_hbkid           TYPE hbkid,
+        lv_hktid           TYPE hktid,
+        lv_zuonr           TYPE dzuonr,
+        lv_sgtxt           TYPE sgtxt,
+        lv_stcd1           TYPE stcd1,
+        lv_stcd2           TYPE stcd1,
+        lv_name1           TYPE kna1-name1,
+        lv_name2           TYPE kna1-name1,
+        lv_name3           TYPE kna1-name1,
+        lv_name4           TYPE kna1-name1,
+        lv_nombrecom       TYPE string,
+        lv_check_param(1),
+        lv_check_param2(1),
+        lv_check_nit(1),
+        lv_flag(1).
+
+  DATA: it_calc_ok_copy LIKE it_calc_ok,
+        it_calc_nn_copy LIKE it_calc_nn.
+
+  FIELD-SYMBOLS: <fs_wa_calc_nn> TYPE ty_calc.
+
+****  Registros Tipo 1 -  Cabecera
+  DATA: lv_cont_50  TYPE i,
+        lv_cont_10  TYPE i,
+        lv_cont_tot TYPE i.
+*
+  CONSTANTS: lk_consec(10) TYPE c VALUE '0',
+**             lk_codorg(10) TYPE c VALUE '0600812500'.
+             lk_codorg(10) TYPE c VALUE '0600801250'.
+
+
+***   Variables cabecera archivo
+  DATA: lv_length      TYPE i,
+        lv_length2     TYPE i,
+        lv_longitud    TYPE i,
+        lv_do_calc     TYPE i,
+        lv_fecha_corte TYPE  c LENGTH  10,
+        lv_trans_tot   TYPE  c LENGTH  10,
+        lv_fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 07.07.2023 #7000003290
+        lv_fin_archivo TYPE  c LENGTH  614.      "Modifica HRDCR 07.07.2023 #7000003290
+
+***   Variables Detalle de Archivo
+  DATA: lv_consec       TYPE  c LENGTH  10.
+
+  CONSTANTS: lk_tipo_mon TYPE  c LENGTH  1 VALUE '1',
+             lk_cod_of   TYPE  c LENGTH  15 VALUE '1              ',
+             lk_cod_dep  TYPE  c LENGTH  5 VALUE '11001',      "Modifica HRDCR 04.07.2023 #7000003290
+             lk_tip_prod TYPE  c LENGTH  2 VALUE '71',      "Modifica HRDCR 04.07.2023 #7000003290
+             lk_tip_tran TYPE  c LENGTH  1 VALUE '2',
+             lk_med_tran TYPE  c LENGTH  1 VALUE '2',
+             lk_apelltit  TYPE c LENGTH  2 VALUE '-1',
+             lk_ingreso  TYPE  c LENGTH  20 VALUE '0',
+             lk_cod_ent  TYPE  c LENGTH  20 VALUE '0600812500',
+             lk_ciiu     TYPE  c LENGTH  4  VALUE '4773'.
+
+  TYPES: BEGIN OF ty_detail,
+           cons_reg     TYPE  c LENGTH  10,
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20,
+           tipo_moned   TYPE  c LENGTH  3,       "Agrega HRDCR 29.06.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Agrega HRDCR 29.06.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,      "Comenta HRDCR 29.06.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 05.07.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,      "Agrega HRDCR 05.07.2023 #7000003290
+           tip_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 04.07.2023 #7000003290
+           med_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 04.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 06.07.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  70,      "Agrega HRDCR 06.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Modifica HRDCR 06.07.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Modifica HRDCR 06.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Modifica HRDCR 06.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Modifica HRDCR 05.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,      "Agrega HRDCR 07.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  60,
+           cod_dep      TYPE  c LENGTH  5,      "Agrega HRDCR 07.07.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2    TYPE  c LENGTH  2,      "Agrega HRDCR 05.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,      "Agrega HRDCR 05.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  60,
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20,
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail.
+  DATA: it_detail TYPE TABLE OF ty_detail,
+        wa_detail LIKE LINE OF it_detail.
+
+  TYPES: BEGIN OF ty_detail_char,
+           cons_reg     TYPE  c LENGTH  10,
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20,
+           tipo_moned   TYPE  c LENGTH  3,      "Agrega HRDCR 29.06.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Agrega HRDCR 30.06.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,      "Comenta HRDCR 30.06.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 30.06.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,      "Agrega HRDCR 04.07.2023 #7000003290
+           tip_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 04.07.2023 #7000003290
+           med_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 04.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 05.07.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  50,      "Agrega HRDCR 05.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Modifica HRDCR 05.07.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Modifica HRDCR 05.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Modifica HRDCR 07.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Modifica HRDCR 07.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,      "Agrega HRDCR 07.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  60,
+           cod_dep      TYPE  c LENGTH  5,      "Agrega HRDCR 07.07.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2    TYPE  c LENGTH  2,      "Agrega HRDCR 07.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,      "Agrega HRDCR 10.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 10.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  60,
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20, ""
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail_char.
+  DATA: wa_detail_char TYPE ty_detail_char.
+
+
+
+  FIELD-SYMBOLS:<fs_wa_detail> TYPE ty_detail.
+
+  DATA: lv_type_descr   TYPE REF TO cl_abap_typedescr,
+        c_tab(1)        TYPE c VALUE cl_abap_char_utilities=>horizontal_tab,
+        lv_separador(1) TYPE c,
+        lv_name_file    TYPE string,
+        lv_char549(549) TYPE c,
+        lv_char548(548) TYPE c,
+        lv_valbase      TYPE i,
+        lv_result       TYPE i,
+        lv_lines        TYPE i.
+
+  TYPES: BEGIN OF ty_head,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           fecha_corte TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 07.07.2023 #7000003290
+         END OF ty_head.
+  DATA: wa_head TYPE ty_head.
+
+  TYPES: BEGIN OF ty_tail,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  614,      "Modifica HRDCR 07.07.2023 #7000003290
+         END OF ty_tail.
+  DATA: wa_tail TYPE ty_tail.
+
+  LOOP AT it_bkpf INTO wa_bkpf.
+    CLEAR: lv_string1, lv_string2, lv_string3, lv_string4, lv_string5, lv_string6,
+           lv_hbkid, lv_hktid, lv_zuonr, lv_sgtxt,
+           lv_stcd1, lv_stcd2, wa_kna1,
+           lv_name1, lv_name2, lv_name3, lv_name4,
+           lv_check_param, lv_check_param2, lv_flag,
+*               wa_calc_ok, wa_calc_nn, lv_lines, it_fact, it_split, it_split[],  Comenta N2N 20/01/2023 #7000003260
+           wa_calc_ok, wa_calc_nn, lv_lines, it_split, it_split[],  "Agrega N2N 20/01/2023 #7000003260
+           wa_fact.      "Agrega N2N 20/01/2023 #7000003260
+
+    SPLIT wa_bkpf-xblnr AT '/' INTO lv_string1 lv_string2.
+    lv_hbkid = lv_string1+0(5).
+    lv_hktid = lv_string1+5(5).
+
+    READ TABLE it_bseg INTO wa_bseg WITH KEY "bukrs = wa_bkpf-bukrs
+                                             belnr = wa_bkpf-belnr BINARY SEARCH.
+    "gjahr = wa_bkpf-gjahr BINARY SEARCH.
+    IF sy-subrc = 0.
+      READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                       hktid = lv_hktid.
+
+      IF sy-subrc = 0. "" El registro hace Match Parcial con la parametrización de la tabla ZCDFIPARAMEFECTI
+
+        IF lv_hbkid = 'DAVI1'. """ Banco Davivienda
+
+          SPLIT wa_bseg-zuonr AT '/' INTO  lv_string3 lv_string4.
+          CONDENSE lv_string3.
+          lv_zuonr = lv_string3.
+
+          SPLIT wa_bseg-sgtxt AT '/' INTO lv_string5 lv_string6.
+          CONDENSE lv_string5.
+          lv_sgtxt = lv_string5.
+
+          READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                           hktid = lv_hktid
+                                                                           zuonr = lv_zuonr
+                                                                           sgtxt = lv_sgtxt.
+          CHECK sy-subrc = 0.
+
+          lv_lines = strlen( lv_string6 ).
+          CHECK lv_lines > 10.
+          lv_lines = lv_lines - 10.
+          lv_lines = abs( lv_lines ).
+*              it_fact-vbeln = lv_string6+lv_lines.   Comenta N2N 20/01/2023 #7000003260
+*              APPEND it_fact.                        Comenta N2N 20/01/2023 #7000003260
+          wa_fact-vbeln = lv_string6+lv_lines.       "Agrega N2N 20/01/2023 #7000003260
+          instfact: wa_fact.                   "Agrega N2N 20/01/2023 #7000003260
+
+        ELSEIF lv_hbkid = 'OCCID'. """ Banco Occidente
+          SPLIT wa_bseg-zuonr AT '/' INTO lv_string2 lv_string3.
+          CONDENSE lv_string2.
+          lv_zuonr = lv_string2.
+
+          SPLIT wa_bseg-sgtxt AT '/' INTO lv_string4 lv_string5 lv_string6.
+          CONDENSE lv_string5.
+          lv_length  = strlen( lv_string5 ).
+          IF lv_length >= '2'.
+            lv_sgtxt = lv_string5(2).
+          ENDIF.
+
+          READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                           hktid = lv_hktid
+                                                                           zuonr = lv_zuonr
+                                                                           sgtxt = lv_sgtxt.
+          CHECK sy-subrc = 0.
+
+          lv_lines = strlen( lv_string6 ).
+          CHECK lv_lines > 10.
+          lv_lines = lv_lines - 10.
+          lv_lines = abs( lv_lines ).
+*              it_fact-vbeln = lv_string6+lv_lines.     Comenta N2N 20/01/2023 #7000003260
+*              APPEND it_fact.                          Comenta N2N 20/01/2023 #7000003260
+          wa_fact-vbeln = lv_string6+lv_lines. "Agrega N2N 20/01/2023 #7000003260
+          instfact: wa_fact.  "Agrega N2N 20/01/2023 #7000003260
+
+
+        ELSEIF lv_hbkid = 'BOGO2'.
+          SPLIT wa_bseg-zuonr AT '/' INTO lv_string3 lv_string4.
+          CONDENSE lv_string3.
+          lv_zuonr = lv_string3.
+
+          READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                           hktid = lv_hktid
+                                                                           zuonr = lv_zuonr.
+          CHECK sy-subrc = 0.
+          IF lv_zuonr EQ '0646'.
+            SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+            READ TABLE it_split INDEX 2.
+            lv_lines = strlen( it_split-string ).
+            CHECK lv_lines > 10.
+            lv_lines = lv_lines - 10.
+*                it_fact-vbeln = it_split-string+lv_lines.  Comenta N2N 20/01/2023 #7000003260
+*                APPEND it_fact.                            Comenta N2N 20/01/2023 #7000003260
+            wa_fact-vbeln = it_split-string+lv_lines.  "Agrega N2N 20/01/2023 #7000003260
+            instfact: wa_fact.        "Agrega N2N 20/01/2023 #7000003260
+
+          ELSEIF lv_zuonr EQ '0091'.
+            SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+            DESCRIBE TABLE it_split LINES lv_lines.
+            CHECK lv_lines EQ 3.
+            READ TABLE it_split INDEX 1.
+            IF sy-subrc EQ 0 AND it_split-string IS NOT INITIAL.
+              wa_fact-vbeln = it_split-string.
+              a_input: wa_fact-vbeln.
+              instfact: wa_fact.
+*                 N2N 20/01/2023 #7000003260}
+
+            ENDIF.
+
+            READ TABLE it_split INDEX 3.
+            IF sy-subrc EQ 0 AND it_split-string IS NOT INITIAL.
+              wa_fact-vbeln = it_split-string.
+              a_input: wa_fact-vbeln.
+              instfact: wa_fact.
+*                 N2N 20/01/2023 #7000003260}
+            ENDIF.
+          ENDIF.
+
+
+        ELSEIF lv_hbkid = 'SOCI3' OR lv_hbkid = 'AGRAR'.
+          SPLIT wa_bseg-zuonr AT '/' INTO lv_string3 lv_string4.
+          CONDENSE lv_string3.
+          lv_zuonr = lv_string3.
+
+          READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                           hktid = lv_hktid
+                                                                           zuonr = lv_zuonr.
+          CHECK sy-subrc = 0.
+          SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+          READ TABLE it_split INDEX 3.
+          IF sy-subrc EQ 0 AND it_split-string IS NOT INITIAL.
+            lv_lines = strlen( it_split-string ).
+            CHECK lv_lines > 10.
+            lv_lines = lv_lines - 10.
+            lv_lines = abs( lv_lines ).
+            wa_fact-vbeln = it_split-string+lv_lines.   "Agrega N2N 20/01/2023 #7000003260
+            instfact: wa_fact.         "Agrega N2N 20/01/2023 #7000003260
+          ENDIF.
+
+        ELSEIF lv_hbkid = 'COLO2'.
+          SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+          READ TABLE it_split INDEX 2.
+          IF sy-subrc EQ 0 AND it_split-string IS NOT INITIAL.
+            lv_lines = strlen( it_split-string ).
+            CHECK lv_lines > 10.
+            lv_lines = lv_lines - 10.
+            lv_lines = abs( lv_lines ).
+            wa_fact-vbeln = it_split-string+lv_lines.  "Agrega N2N 20/01/2023 #7000003260
+            instfact: wa_fact.                   "Agrega N2N 20/01/2023 #7000003260
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ORDENAR_FACTURAS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM comprobar_facturas USING i_bkpf i_bseg
+                        CHANGING i_check
+                                 i_vbeln
+                                 i_vbeln_bog.
+
+  DATA: wa_r_date           LIKE LINE OF r_date,
+        wa_bkpf             LIKE LINE OF it_bkpf,
+        wa_bseg             LIKE LINE OF it_bseg,
+        wa_zcdfiparamefecti LIKE LINE OF it_zcdfiparamefecti,
+        wa_kna1             LIKE LINE OF it_kna1,
+**        wa_lfa1             LIKE LINE OF it_lfa1,
+        wa_knvp             LIKE LINE OF it_knvp,
+        wa_calc_ok          LIKE LINE OF it_calc_ok,
+        wa_calc_nn          LIKE LINE OF it_calc_nn,
+        wa_sum_ok           LIKE LINE OF it_sum_ok,
+        wa_sum_nn           LIKE LINE OF it_sum_nn,
+        wa_sum_50           LIKE LINE OF it_sum_50,
+        wa_sum_50_nn        LIKE LINE OF it_sum_50_nn.
+
+  DATA: lv_date_ini1       TYPE datum,
+        lv_date_ini2       TYPE datum,
+        lv_date_fin1       TYPE datum,
+        lv_date_fin2       TYPE datum,
+        lv_mes_1(2)        TYPE c,
+        lv_mes_2(2)        TYPE c,
+        lv_string1         TYPE string,
+        lv_string2         TYPE string,
+        lv_string3         TYPE string,
+        lv_string4         TYPE string,
+        lv_string5         TYPE string,
+        lv_string6         TYPE string,
+        lv_hbkid           TYPE hbkid,
+        lv_hktid           TYPE hktid,
+        lv_zuonr           TYPE dzuonr,
+        lv_sgtxt           TYPE sgtxt,
+        lv_stcd1           TYPE stcd1,
+        lv_stcd2           TYPE stcd1,
+        lv_name1           TYPE kna1-name1,
+        lv_name2           TYPE kna1-name1,
+        lv_name3           TYPE kna1-name1,
+        lv_name4           TYPE kna1-name1,
+        lv_nombrecom       TYPE string,
+        lv_check_param(1),
+        lv_check_param2(1),
+        lv_check_nit(1),
+        lv_flag(1).
+
+  DATA: it_calc_ok_copy LIKE it_calc_ok,
+        it_calc_nn_copy LIKE it_calc_nn.
+
+  FIELD-SYMBOLS: <fs_wa_calc_nn> TYPE ty_calc.
+
+****  Registros Tipo 1 -  Cabecera
+  DATA: lv_cont_50  TYPE i,
+        lv_cont_10  TYPE i,
+        lv_cont_tot TYPE i.
+*
+  CONSTANTS: lk_consec(10) TYPE c VALUE '0',
+**             lk_codorg(10) TYPE c VALUE '0600812500'.
+             lk_codorg(10) TYPE c VALUE '0600801250'.
+
+
+***   Variables cabecera archivo
+  DATA: lv_length      TYPE i,
+        lv_length2     TYPE i,
+        lv_longitud    TYPE i,
+        lv_do_calc     TYPE i,
+        lv_fecha_corte TYPE  c LENGTH  10,
+        lv_trans_tot   TYPE  c LENGTH  10,
+        lv_fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 07.07.2023 #7000003290
+        lv_fin_archivo TYPE  c LENGTH  614.      "Modifica HRDCR 07.07.2023 #7000003290
+
+***   Variables Detalle de Archivo
+  DATA: lv_consec       TYPE  c LENGTH  10.
+
+  CONSTANTS: lk_tipo_mon TYPE  c LENGTH  1 VALUE '1',
+             lk_cod_of   TYPE  c LENGTH  15 VALUE '1              ',
+             lk_cod_dep  TYPE  c LENGTH  5 VALUE '11001',      "Agrega HRDCR 05.07.2023 #7000003290
+             lk_tip_prod TYPE  c LENGTH  2 VALUE '71',      "Agrega HRDCR 05.07.2023 #7000003290
+             lk_tip_tran TYPE  c LENGTH  1 VALUE '2',
+             lk_med_tran TYPE  c LENGTH  1 VALUE  '2',
+             lk_apelltit TYPE  c LENGTH  2 VALUE  '-1',
+             lk_ingreso  TYPE  c LENGTH  20 VALUE '0',
+             lk_cod_ent  TYPE  c LENGTH  20 VALUE '0600812500',
+             lk_ciiu     TYPE  c LENGTH  4  VALUE '4773'.
+
+  TYPES: BEGIN OF ty_detail,
+           cons_reg     TYPE  c LENGTH  10,
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20,
+           tipo_moned   TYPE  c LENGTH  3,      "Agrega HRDCR 04.07.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Agrega HRDCR 04.07.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,      "Comenta HRDCR 04.07.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 06.07.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,      "Agrega HRDCR 06.07.2023 #7000003290
+           tip_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 07.07.2023 #7000003290
+           med_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 07.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 06.07.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  50,      "Agrega HRDCR 06.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Comenta HRDCR 07.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,      "Agrega HRDCR 06.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  60,
+           cod_dep      TYPE  c LENGTH  5,      "Agrega HRDCR 05.07.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2    TYPE  c LENGTH  2,      "Agrega HRDCR 05.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,      "Agrega HRDCR 05.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 05.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  60,      "Agrega HRDCR 04.07.2023 #7000003290
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20,
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail.
+  DATA: it_detail TYPE TABLE OF ty_detail,
+        wa_detail LIKE LINE OF it_detail.
+
+  TYPES: BEGIN OF ty_detail_char,
+           cons_reg     TYPE  c LENGTH  10,
+           fecha_trans  TYPE  c LENGTH  10,
+           val_trans    TYPE  c LENGTH  20,
+           tipo_moned   TYPE  c LENGTH  3,      "Agrega HRDCR 10.07.2023 #7000003290
+           cod_ofici    TYPE  c LENGTH  15,      "Agrega HRDCR 10.07.2023 #7000003290
+           "cod_of       TYPE  c LENGTH  15,      "Comenta HRDCR 10.07.2023 #7000003290
+           "tipo_mon     TYPE  c LENGTH  1,      "Comenta HRDCR 10.07.2023 #7000003290
+           tip_prod     TYPE  c LENGTH  2,
+           tip_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 10.07.2023 #7000003290
+           med_tran     TYPE  c LENGTH  1,      "Agrega HRDCR 10.07.2023 #7000003290
+           num_cta      TYPE  c LENGTH  20,
+           tip_id       TYPE  c LENGTH  2,
+           tip_cta      TYPE  c LENGTH  20,
+           dig_verif    TYPE  c LENGTH  2,      "Agrega HRDCR 10.07.2023 #7000003290
+           nombrecom    TYPE  c LENGTH  50,      "Agrega HRDCR 10.07.2023 #7000003290
+           "apellido1    TYPE  c LENGTH  40,      "Comenta HRDCR 10.07.2023 #7000003290
+           "apellido2    TYPE  c LENGTH  40,      "Comenta HRDCR 10.07.2023 #7000003290
+           "nombre1      TYPE  c LENGTH  40,      "Comenta HRDCR 10.07.2023 #7000003290
+           "nombre2      TYPE  c LENGTH  40,      "Comenta HRDCR 10.07.2023 #7000003290
+           apelltit    TYPE  c LENGTH  85,      "Agrega HRDCR 10.07.2023 #7000003290
+           razon_social TYPE  c LENGTH  60,
+           cod_dep      TYPE  c LENGTH  5 ,      "Agrega HRDCR 10.07.2023 #7000003290
+           tip_id2      TYPE  c LENGTH  2,
+           tip_cta2     TYPE  c LENGTH  20,
+           dig_verif2    TYPE  c LENGTH  2,      "Agrega HRDCR 10.07.2023 #7000003290
+           nombrecom2    TYPE  c LENGTH  70,      "Agrega HRDCR 10.07.2023 #7000003290
+           apelltit2    TYPE  c LENGTH  85,      "Agrega HRDCR 10.07.2023 #7000003290
+           razon_social2 TYPE  c LENGTH  60,      "Agrega HRDCR 10.07.2023 #7000003290
+           actividad    TYPE  c LENGTH  20,
+           ingreso      TYPE  c LENGTH  20, ""
+           apellido1_2  TYPE  c LENGTH  40,
+           apellido2_2  TYPE  c LENGTH  40,
+           nombre1_2    TYPE  c LENGTH  40,
+           nombre2_2    TYPE  c LENGTH  41,
+         END OF ty_detail_char.
+  DATA: wa_detail_char TYPE ty_detail_char.
+
+
+
+  FIELD-SYMBOLS:<fs_wa_detail> TYPE ty_detail.
+
+  DATA: lv_type_descr   TYPE REF TO cl_abap_typedescr,
+        c_tab(1)        TYPE c VALUE cl_abap_char_utilities=>horizontal_tab,
+        lv_separador(1) TYPE c,
+        lv_name_file    TYPE string,
+        lv_char549(549) TYPE c,
+        lv_char548(548) TYPE c,
+        lv_valbase      TYPE i,
+        lv_result       TYPE i,
+        lv_lines        TYPE i.
+
+  TYPES: BEGIN OF ty_head,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           fecha_corte TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  604,      "Modifica HRDCR 10.07.2023 #7000003290
+         END OF ty_head.
+  DATA: wa_head TYPE ty_head.
+
+  TYPES: BEGIN OF ty_tail,
+           cons        TYPE  c LENGTH  10,
+           cod_org     TYPE  c LENGTH  10,
+           trans_tot   TYPE  c LENGTH  10,
+           fin_reg_cab TYPE  c LENGTH  614,      "Modifica HRDCR 10.07.2023 #7000003290
+         END OF ty_tail.
+  DATA: wa_tail TYPE ty_tail.
+
+*    LOOP AT it_bkpf INTO wa_bkpf.
+  MOVE: i_bkpf TO wa_bkpf,
+        i_bseg TO wa_bseg.
+  CLEAR: lv_string1, lv_string2, lv_string3, lv_string4, lv_string5, lv_string6,
+         lv_hbkid, lv_hktid, lv_zuonr, lv_sgtxt,
+         lv_stcd1, lv_stcd2, wa_kna1,
+         lv_name1, lv_name2, lv_name3, lv_name4,
+         lv_check_param, lv_check_param2, lv_flag,
+*               wa_calc_ok, wa_calc_nn, lv_lines, it_fact, it_split, it_split[],  "Comenta N2N 20/01/2023 #7000003260
+         wa_calc_ok, wa_calc_nn, lv_lines, it_split, it_split[],    "Agrega N2N 20/01/2023 #7000003260
+         wa_fact. "Agrega N2N 20/01/2023 #7000003260
+
+  SPLIT wa_bkpf-xblnr AT '/' INTO lv_string1 lv_string2.
+  lv_hbkid = lv_string1+0(5).
+  lv_hktid = lv_string1+5(5).
+
+*        READ TABLE it_bseg INTO wa_bseg WITH KEY bukrs = wa_bkpf-bukrs
+*                                                 belnr = wa_bkpf-belnr
+*                                                 gjahr = wa_bkpf-gjahr BINARY SEARCH.
+*        IF sy-subrc = 0.
+  IF wa_bseg IS NOT INITIAL.
+    READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                     hktid = lv_hktid.
+
+    IF sy-subrc = 0. "" El registro hace Match Parcial con la parametrización de la tabla ZCDFIPARAMEFECTI
+
+      IF lv_hbkid = 'DAVI1'. """ Banco Davivienda
+
+        SPLIT wa_bseg-zuonr AT '/' INTO  lv_string3 lv_string4.
+        CONDENSE lv_string3.
+        lv_zuonr = lv_string3.
+
+        SPLIT wa_bseg-sgtxt AT '/' INTO lv_string5 lv_string6.
+        CONDENSE lv_string5.
+        lv_sgtxt = lv_string5.
+
+        READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                         hktid = lv_hktid
+                                                                         zuonr = lv_zuonr
+                                                                         sgtxt = lv_sgtxt.
+        CHECK sy-subrc = 0.
+        i_check = 'X'.
+
+        lv_lines = strlen( lv_string6 ).
+        CHECK lv_lines > 10.
+        lv_lines = lv_lines - 10.
+
+
+*             {N2N 20/01/2023 #7000003260
+        DATA: lv_vbeln TYPE vbrk-vbeln.
+        lv_vbeln = lv_string6+lv_lines.
+        READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+        IF sy-subrc EQ 0.
+          i_vbeln = wa_fact-vbeln.
+        ENDIF.
+*              N2N 20/01/2023 #7000003260}
+
+      ELSEIF lv_hbkid = 'OCCID'. """ Banco Occidente
+        SPLIT wa_bseg-zuonr AT '/' INTO lv_string2 lv_string3.
+        CONDENSE lv_string2.
+        lv_zuonr = lv_string2.
+
+        SPLIT wa_bseg-sgtxt AT '/' INTO lv_string4 lv_string5 lv_string6.
+        CONDENSE lv_string5.
+        lv_length  = strlen( lv_string5 ).
+        IF lv_length >= '2'.
+          lv_sgtxt = lv_string5(2).
+        ENDIF.
+
+        READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                         hktid = lv_hktid
+                                                                         zuonr = lv_zuonr
+                                                                         sgtxt = lv_sgtxt.
+        CHECK sy-subrc = 0.
+        i_check = 'X'.
+
+        lv_lines = strlen( lv_string6 ).
+        CHECK lv_lines > 10.
+        lv_lines = lv_lines - 10.
+        lv_vbeln = lv_string6+lv_lines.
+        READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+        IF sy-subrc EQ 0.
+          i_vbeln = wa_fact-vbeln.
+        ENDIF.
+*              N2N 20/01/2023 #7000003260}
+
+
+      ELSEIF lv_hbkid = 'BOGO2'.
+        SPLIT wa_bseg-zuonr AT '/' INTO lv_string3 lv_string4.
+        CONDENSE lv_string3.
+        lv_zuonr = lv_string3.
+
+        READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                         hktid = lv_hktid
+                                                                         zuonr = lv_zuonr.
+        CHECK sy-subrc = 0.
+        i_check = 'X'.
+        IF lv_zuonr EQ '0646'.
+          SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+          READ TABLE it_split INDEX 2.
+          lv_lines = strlen( it_split-string ).
+          CHECK lv_lines > 10.
+          lv_lines = lv_lines - 10.
+          lv_vbeln = it_split-string+lv_lines.
+          READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+          IF sy-subrc EQ 0.
+            i_vbeln = wa_fact-vbeln.
+          ENDIF.
+*              N2N 20/01/2023 #7000003260}
+
+        ELSEIF lv_zuonr EQ '0091'.
+          SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+          DESCRIBE TABLE it_split LINES lv_lines.
+          CHECK lv_lines EQ 3.
+          READ TABLE it_split INDEX 1.
+          IF sy-subrc EQ 0.
+            lv_vbeln = it_split-string.
+            a_input: lv_vbeln.
+            READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+            IF sy-subrc EQ 0.
+              i_vbeln_bog = wa_fact-vbeln.
+            ENDIF.
+*              N2N 20/01/2023 #7000003260}
+          ENDIF.
+          READ TABLE it_split INDEX 3.
+          IF sy-subrc EQ 0.
+            lv_vbeln = it_split-string.
+            a_input: lv_vbeln.
+            READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+            IF sy-subrc EQ 0.
+              CONCATENATE i_vbeln_bog wa_fact-vbeln INTO i_vbeln_bog SEPARATED BY '/'.
+            ENDIF.
+*              N2N 20/01/2023 #7000003260}
+          ENDIF.
+        ENDIF.
+
+
+      ELSEIF lv_hbkid = 'SOCI3' OR lv_hbkid = 'AGRAR'.
+        SPLIT wa_bseg-zuonr AT '/' INTO lv_string3 lv_string4.
+        CONDENSE lv_string3.
+        lv_zuonr = lv_string3.
+
+        READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                         hktid = lv_hktid
+                                                                         zuonr = lv_zuonr.
+        CHECK sy-subrc = 0.
+        i_check = 'X'.
+        SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+        READ TABLE it_split INDEX 3.
+        IF sy-subrc EQ 0.
+          lv_lines = strlen( it_split-string ).
+          CHECK lv_lines > 10.
+          lv_lines = lv_lines - 10.
+          lv_vbeln = it_split-string+lv_lines.
+          READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+          IF sy-subrc EQ 0.
+            i_vbeln = wa_fact-vbeln.
+          ENDIF.
+*              N2N 20/01/2023 #7000003260}
+        ENDIF.
+
+      ELSEIF lv_hbkid = 'COLO2'.
+        SPLIT wa_bseg-zuonr AT '/' INTO lv_string3 lv_string4.
+        CONDENSE lv_string3.
+        lv_zuonr = lv_string3.
+
+        READ TABLE it_zcdfiparamefecti INTO wa_zcdfiparamefecti WITH KEY hbkid = lv_hbkid
+                                                                         hktid = lv_hktid
+                                                                         zuonr = lv_zuonr.
+        CHECK sy-subrc = 0.
+        i_check = 'X'.
+
+        SPLIT wa_bseg-sgtxt AT '/' INTO TABLE it_split.
+        READ TABLE it_split INDEX 2.
+        IF sy-subrc EQ 0.
+          lv_lines = strlen( it_split-string ).
+          CHECK lv_lines > 10.
+          lv_lines = lv_lines - 10.
+          lv_vbeln = it_split-string+lv_lines.
+          READ TABLE it_fact2 INTO wa_fact WITH TABLE KEY vbeln = lv_vbeln.
+          IF sy-subrc EQ 0.
+            i_vbeln = wa_fact-vbeln.
+          ENDIF.
+*              N2N 20/01/2023 #7000003260}
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+*    ENDLOOP.
+ENDFORM.
+* Ini BN2NMCBARRET 14.02.2023 #7000003261
+*&---------------------------------------------------------------------*
+*&      Form  f_local_load_file
+*&---------------------------------------------------------------------*
+*       Descarga local de archivos
+*----------------------------------------------------------------------*
+*  -->  pt_table      Contenido
+*  <--  p_filename    Nombre del archivo
+*  <--  p_path        Ruta de descarga
+*----------------------------------------------------------------------*
+FORM f_local_load_file USING pt_table   TYPE ANY TABLE
+                             p_filename TYPE string
+                             p_path     TYPE localfile.
+*Descarga local
+  DATA: lv_filename TYPE string.
+
+  IF p_path IS INITIAL OR pt_table IS INITIAL OR p_filename IS INITIAL OR
+     sy-batch EQ abap_true.
+    RETURN.
+  ENDIF.
+
+  CONCATENATE p_path '\' p_filename INTO lv_filename.
+
+  cl_gui_frontend_services=>gui_download(
+    EXPORTING
+      filename                  = lv_filename
+    CHANGING
+      data_tab                  = pt_table
+    EXCEPTIONS
+      file_write_error          = 1
+      no_batch                  = 2
+      gui_refuse_filetransfer   = 3
+      invalid_type              = 4
+      no_authority              = 5
+      unknown_error             = 6
+      header_not_allowed        = 7
+      separator_not_allowed     = 8
+      filesize_not_allowed      = 9
+      header_too_long           = 10
+      dp_error_create           = 11
+      dp_error_send             = 12
+      dp_error_write            = 13
+      unknown_dp_error          = 14
+      access_denied             = 15
+      dp_out_of_memory          = 16
+      disk_full                 = 17
+      dp_timeout                = 18
+      file_not_found            = 19
+      dataprovider_exception    = 20
+      control_flush_error       = 21
+      not_supported_by_gui      = 22
+      error_no_gui              = 23
+      OTHERS                    = 24 ).
+  IF sy-subrc <> 0.
+*  Error al guardar arvhivo
+    MESSAGE s169(rsod) WITH p_path sy-subrc DISPLAY LIKE 'E'.
+  ENDIF.
+
+ENDFORM.                 "f_local_load_file
+*&---------------------------------------------------------------------*
+*&      Form  f_local_load_file
+*&---------------------------------------------------------------------*
+*       Seleccionar directorio local
+*----------------------------------------------------------------------*
+*  <--  p_path        Directorio local
+*----------------------------------------------------------------------*
+FORM f_get_local_root CHANGING p_path TYPE localfile.
+
+  DATA: lv_path_sel TYPE string.
+
+  CALL METHOD cl_gui_frontend_services=>directory_browse
+    CHANGING
+      selected_folder = lv_path_sel
+    EXCEPTIONS
+      cntl_error      = 1
+      error_no_gui    = 2
+      OTHERS          = 3.
+  IF sy-subrc = 0.
+    CALL METHOD cl_gui_cfw=>flush( ).
+    IF NOT lv_path_sel IS INITIAL.
+      p_path = lv_path_sel.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+* Fin BN2NMCBARRET 14.02.2023 #7000003261
